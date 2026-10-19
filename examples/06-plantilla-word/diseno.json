@@ -1,0 +1,4 @@
+{
+  "fileName": "equipo_{DOC.DNAME}",
+  "batch": { "zipName": "equipos_{TODAY}" }
+}

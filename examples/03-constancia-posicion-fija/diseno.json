@@ -1,0 +1,25 @@
+{
+  "page": { "size": "a4", "orientation": "portrait", "margin": 18, "font": "helvetica" },
+  "fileName": "constancia_{DOC.DOC_KEY}",
+  "sections": [
+    { "type": "imagen", "url": "#APP_FILES#logo.png", "width": 34, "x": 18, "y": 12 },
+    { "type": "texto", "source": "DOCS", "text": "**{NRO_DOC}**", "size": 12, "align": "right", "y": 16 },
+    { "type": "espacio", "height": 18 },
+    { "type": "texto", "align": "center", "size": 11, "lineHeight": 1.6, "paragraphGap": 0, "text": [
+      "**CONSTANCIA DE TRABAJO**", "*Departamento de Recursos Humanos*" ] },
+    { "type": "espacio", "height": 8 },
+    { "type": "texto", "source": "DOCS", "size": 11, "text": "Ciudad, {FECHA_TXT}" },
+    { "type": "espacio", "height": 4 },
+    { "type": "texto", "source": "DOCS", "size": 11, "lineHeight": 1.6, "align": "justify", "text":
+      "Por este medio hacemos constar que **{ENAME}** labora en nuestra empresa desde el {HIREDATE}, desempeñando el puesto de {JOB} en el departamento de {DNAME}, con un salario mensual de **{SAL|money}**." },
+    { "type": "texto", "size": 11, "lineHeight": 1.6, "text": "Se extiende la presente a solicitud del interesado para los fines que estime convenientes." },
+    { "type": "espacio", "height": 30 },
+    { "type": "linea", "width": 70, "align": "center", "thickness": 0.25, "gap": 1 },
+    { "type": "texto", "size": 10, "align": "center", "lineHeight": 1.3, "paragraphGap": 0, "text": [
+      "**Gerencia de Recursos Humanos**", "Empresa de Ejemplo, S.A." ] },
+    { "type": "imagen", "url": "#APP_FILES#logo.png", "width": 28, "x": 18, "y": 277 },
+    { "type": "linea", "x1": 192, "y1": 275.5, "x2": 192, "y2": 291.5, "color": "#9BB5A3", "thickness": 0.3 },
+    { "type": "texto", "x": 110, "width": 80, "y": 275.5, "size": 7, "align": "right", "lineHeight": 1.35, "paragraphGap": 0, "color": "#5E8C6A",
+      "text": [ "(000) 0000-0000", "Ciudad, País", "www.ejemplo.com" ] }
+  ]
+}

@@ -1,0 +1,430 @@
+# Referencia del diseño (JSON)
+
+El diseño describe **qué** se dibuja; las [fuentes SQL](API.md#3-fuentes-sql) dicen **con qué datos**. Un mismo diseño produce PDF, Excel y Word.
+
+- [Estructura general](#estructura-general)
+- [Plantillas de texto `{...}`](#plantillas-de-texto-)
+- [Formatos de valor](#formatos-de-valor)
+- [Condiciones](#condiciones)
+- [Secciones](#secciones): [header](#header) · [ficha](#ficha) · [tabla](#tabla) · [alerta](#alerta) · [texto](#texto) · [imagen](#imagen) · [linea](#linea) · [espacio y salto](#espacio-y-salto)
+- [Qué soporta cada formato](#qué-soporta-cada-formato)
+- [Excel: hojas](#excel-hojas)
+- [Lotes y resumen](#lotes-y-resumen)
+- [Reutilizar partes: `defs`](#reutilizar-partes-defs)
+- [Word desde plantilla](#word-desde-plantilla-docx-template)
+
+Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) están en **milímetros**; los tamaños de letra (`size`) en **puntos**.
+
+---
+
+## Estructura general
+
+```json
+{
+  "page": {
+    "size": "letter",
+    "orientation": "portrait",
+    "margin": 8,
+    "font": "helvetica",
+    "theme": { "primary": "#1F4E79", "headText": "#FFFFFF", "zebra": "#F5F7FA",
+               "totals": "#E6ECF2", "muted": "#787878", "fontSize": 7 }
+  },
+  "title": "Propiedad Título del PDF / Word",
+  "fileName": "estado_{DOC.CLIENTE}",
+  "emptyMessage": "No hay datos para este filtro.",
+  "sections": [ ],
+  "footer": { "left": "Confidencial", "right": "Página {PAGE} de {PAGES}", "size": 7 },
+  "defs": { },
+  "xlsx": { "sheets": [ { "name": "Datos", "sections": ["enc", "detalle"] } ] },
+  "batch": { "zipName": "lote_{TODAY}", "mergeName": "todo", "chunkSize": 5, "maxDocs": 3000,
+             "summary": { "fileName": "00_resumen", "sections": [ ], "footer": { } } }
+}
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `page.size` | `letter` | `letter`, `legal` o `a4` (en PDF también otros formatos de jsPDF, como `a3`). |
+| `page.orientation` | `portrait` | `portrait` o `landscape`. |
+| `page.margin` | `8` (PDF), `12.7` (Word) | Margen en mm. Excel ajusta la impresión a una página de ancho. |
+| `page.font` | `helvetica` | Letra por defecto de `texto`: `helvetica`, `times` o `courier` (alias: `arial`, `serif`, `mono`). |
+| `page.theme.primary` | `#1F4E79` | Fondo de `header` y encabezados de tabla. |
+| `page.theme.headText` | `#FFFFFF` | Texto sobre `primary`. |
+| `page.theme.zebra` | `#F5F7FA` | Filas alternas. |
+| `page.theme.totals` | `#E6ECF2` | Fila de totales. |
+| `page.theme.muted` | `#787878` | Texto del pie de página. |
+| `page.theme.fontSize` | `7` | Tamaño base de tablas (PDF y Word). |
+| `title` | — | Propiedad *Título* del PDF y del Word. Acepta plantillas. |
+| `fileName` | `reporte` | Nombre de cada documento, sin extensión. Acepta plantillas (`{DOC.X}`, `{TODAY}`). |
+| `emptyMessage` | `No hay datos para generar el reporte.` | Mensaje si `DOCS` no trae filas. |
+| `sections` | — | Lista de [secciones](#secciones), en orden. |
+| `footer.left` / `footer.right` | — | Pie de cada página. `{PAGE}` y `{PAGES}` solo funcionan aquí. |
+| `footer.size` | `7` | Tamaño de letra del pie (PDF y Word). |
+| `defs` | — | Bloques reutilizables. Ver [defs](#reutilizar-partes-defs). |
+| `xlsx` | — | Hojas de Excel. Ver [Excel](#excel-hojas). |
+| `batch` | — | Nombres y resumen del lote. Ver [Lotes](#lotes-y-resumen). |
+
+Sin `footer`, el PDF y el Word no llevan pie. En Excel el pie usa `footer.left` y siempre muestra *Página X de Y* a la derecha.
+
+## Plantillas de texto `{...}`
+
+Cualquier texto (`title`, `label`, `value`, `text`, `fileName`…) puede incluir marcadores:
+
+| Marcador | Valor |
+|---|---|
+| `{COL}` | Columna de la fila actual. Busca en: la fila de la sección (`source`), luego el documento (`DOCS`), luego los parámetros. |
+| `{FUENTE.COL}` | Columna de la **primera fila** de otra fuente: `{EMPRESA.RUC}`. |
+| `{DOC.COL}` | Fila del documento actual (fuente `DOCS`). |
+| `{PARAM.X}` | Parámetro (`data-x` del elemento o `params` de la API). |
+| `{ITEM.P1_X}` | Valor **actual en pantalla** de un ítem (`apex.item().getValue()`), no el de sesión. |
+| `{NOW}` | Fecha y hora local del navegador: `19/10/2026 14:05`. |
+| `{TODAY}` | Fecha: `19/10/2026`. |
+| `{PAGE}` / `{PAGES}` | Página actual / total. Solo en `footer`. |
+| `{COL\|formato}` | Valor con [formato](#formatos-de-valor): `{SALDO\|money}`. |
+
+Un marcador sin valor se reemplaza por texto vacío.
+
+## Formatos de valor
+
+Se usan en `{COL|formato}` o en la propiedad `"fmt"` de columnas y campos.
+
+| Formato | Entrada | Resultado | En Excel |
+|---|---|---|---|
+| `money` | `1234.5` | `1,234.50` | número con `#,##0.00` |
+| `num:3` | `1.23456` | `1.235` | número con 3 decimales |
+| `int` | `1234.6` | `1,235` | número con `#,##0` |
+| `pct` / `pct:1` | `12.5` | `12.50%` / `12.5%` | número sin formato (`12.5`) |
+| `date` | `09/12/1982` | `09/12/1982` | fecha real `dd/mm/yyyy` |
+| `upper` / `lower` | `Ana` | `ANA` / `ana` | texto |
+| `yn` | `Y`, `S` / `N` | `Sí` / `No` | texto |
+
+- Los números usan coma para miles y punto para decimales.
+- `pct` no multiplica por 100: espera el porcentaje ya calculado.
+- Una columna `NUMBER` sin `fmt` usa `money` si alguna fila tiene decimales; si todas son enteras, se muestra tal cual.
+- Cualquier otro valor de `fmt` deja el valor sin cambios (en Excel, número con formato *General*).
+
+## Condiciones
+
+Las usan `filter`, `when`, `rowStyle` y `cellStyle`.
+
+| Expresión | Verdadera si |
+|---|---|
+| `ESTADO == 'ACTIVO'` | igual (comparación como texto) |
+| `ESTADO != 'X'` | distinto |
+| `MONTO > 0`, `<`, `>=`, `<=` | comparación numérica |
+| `ALERTA` | tiene valor: no es vacío, `null`, `0` ni `'N'` |
+| `!ALERTA` | no tiene valor |
+| `MONTO > LIMITE` | compara contra otra columna (si el lado derecho no es un literal) |
+| `A == 'X' && B > 0` | ambas |
+| `A == 'X' \|\| B == 'Y'` | cualquiera (`&&` tiene prioridad) |
+
+Literales: `'texto'`, `"texto"`, números y `null`. `COL == ''` y `COL == null` son verdaderos si la columna está vacía. No hay paréntesis.
+
+## Secciones
+
+Propiedades comunes a todas:
+
+| Propiedad | Descripción |
+|---|---|
+| `type` | Tipo de sección. |
+| `id` | Nombre para usarla en `xlsx.sheets`. |
+| `formats` | Limita los formatos donde aparece: `["pdf", "docx"]`. |
+| `source` | Fuente de datos (en mayúsculas o minúsculas). |
+
+### `header`
+
+Banda de color con título.
+
+```json
+{ "type": "header", "title": "Estado de cuenta - {DOC.CLIENTE}", "subtitle": "Corte al {TODAY}",
+  "right": "Generado: {NOW}", "size": 14 }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `title` | — | Título (70 % del ancho en PDF). |
+| `subtitle` | — | Segunda línea. |
+| `right` | — | Texto a la derecha. En Excel se une al subtítulo con ` \| `. |
+| `size` | `14` | Tamaño del título (PDF). |
+
+### `ficha`
+
+Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source` (o del documento si no hay `source`).
+
+```json
+{ "type": "ficha", "source": "DOCS", "columns": 3, "labelWidth": 32, "size": 8.5, "fields": [
+  { "label": "Cliente",  "value": "{CLIENTE}" },
+  { "label": "Saldo",    "value": "{SALDO|money}" },
+  { "label": "Tasa",     "value": "{TASA}% anual" },
+  { "label": "Estado",   "value": "{ESTADO}", "map": { "A": "Activo", "I": "Inactivo" } },
+  { "label": "Balón",    "value": "{MONTO_BALON}", "fmt": "money", "when": "MONTO_BALON > 0" },
+  { "label": "Desembolso", "value": "{FECHA_DESEMBOLSO}", "fmt": "date" } ] }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `columns` | `3` | Pares por fila. |
+| `labelWidth` | `32` | Ancho de la etiqueta en mm (PDF). |
+| `size` | `8.5` | Tamaño de letra (PDF). |
+| `fields[].label` | — | Etiqueta (acepta plantillas). |
+| `fields[].value` | — | Valor (plantilla). |
+| `fields[].fmt` | — | Formato si `value` es un solo marcador (`"{SALDO}"`). En Excel deja el número o la fecha como valor real. |
+| `fields[].map` | — | Traduce el valor: `{ "A": "Activo" }`. |
+| `fields[].when` | — | El campo solo aparece si se cumple la [condición](#condiciones). |
+
+### `tabla`
+
+```json
+{ "type": "tabla", "source": "PLAN", "title": "Plan de pagos - {DOC.NRO}",
+  "filter": "ESCENARIO == 'ACTUAL'",
+  "columns": [
+    { "col": "NRO", "label": "#", "align": "center", "width": 10 },
+    { "col": "FECHA", "label": "Fecha", "fmt": "date" },
+    { "col": "CAPITAL", "label": "Capital", "fmt": "money",
+      "cellStyle": [ { "when": "CAPITAL < 0", "color": "#AA1E1E", "bold": true } ] },
+    { "col": "TIPO", "label": "Tipo", "map": { "N": "Normal", "B": "Balón" } },
+    { "label": "Periodo", "value": "{NRO} de {DOC.PAGOS}" } ],
+  "totals": ["CAPITAL"], "totalsLabel": "Totales",
+  "rowStyle": [ { "when": "TIPO == 'B'", "fill": "#FFD699", "bold": true } ],
+  "emptyText": "Sin pagos", "hideEmpty": true, "repeatHeader": true, "zebra": true, "size": 7, "gap": 3 }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `title` | — | Fila de título sobre el encabezado. |
+| `filter` | — | Solo las filas que cumplen la [condición](#condiciones). |
+| `columns` | todas | Columnas. Sin `columns` se usan todas las de la consulta (excepto `DOC_KEY`), con el alias como etiqueta (`FECHA_PAGO` → `Fecha pago`). Un elemento puede ser solo el nombre: `"ENAME"`. |
+| `totals` | — | Columnas a sumar. En Excel la fila usa `=SUM()`. |
+| `totalsLabel` | `Totales` | Texto de la fila de totales (en la primera columna que no se suma). |
+| `rowStyle` | — | Reglas por fila: `when`, `fill`, `color`, `bold`. Se aplica la primera que se cumple. |
+| `groups` | — | Encabezado agrupado. Ver abajo. |
+| `emptyText` | — | Si no hay filas, muestra la tabla con este texto. |
+| `hideEmpty` | `true` | Sin filas y sin `emptyText`, la tabla no se dibuja. `false` dibuja solo el encabezado. |
+| `repeatHeader` | `true` | Repite el encabezado en cada página (PDF). |
+| `zebra` | `true` | Filas alternas (Excel y Word; el PDF siempre las alterna). |
+| `size` | `theme.fontSize` | Tamaño de letra (PDF). |
+| `gap` | `3` | Espacio después de la tabla en mm (PDF). |
+
+**Columnas:**
+
+| Propiedad | Descripción |
+|---|---|
+| `col` | Columna de la fuente (alias). |
+| `label` | Encabezado. |
+| `fmt` | [Formato](#formatos-de-valor). |
+| `align` | `left`, `center`, `right`. Por defecto: números a la derecha, fechas al centro, texto a la izquierda. |
+| `bold` | Negrita. |
+| `color` | Color fijo del texto. |
+| `width` | PDF: ancho en mm. Word: peso relativo. Excel calcula el ancho por contenido. |
+| `map` | Traducción de valores: `{ "Y": "Sí" }`. |
+| `value` | Columna calculada con plantilla: `"{NOMBRE} ({CODIGO})"`. Se exporta como texto. |
+| `cellStyle` | Reglas para la celda: `when`, `fill`, `color`, `bold`. Tiene prioridad sobre `rowStyle`. |
+
+**Encabezado agrupado:**
+
+```json
+"groups": [ { "cols": 2 }, { "label": "Devengado", "cols": 2 }, { "label": "Aplicado", "cols": 3 } ]
+```
+
+Los grupos se aplican en orden, de izquierda a derecha. Un grupo sin `label` deja esas columnas con su etiqueta ocupando las dos filas del encabezado (en Word, la celda del grupo queda vacía). Las columnas que sobran quedan sin grupo.
+
+**Excel:** números y fechas como valores reales, encabezado inmovilizado y autofiltro cuando la hoja tiene una sola tabla.
+
+### `alerta`
+
+Franja de color con texto, solo si se cumple `when`.
+
+```json
+{ "type": "alerta", "source": "ESC", "when": "ALERTA", "each": true, "text": "{ESCENARIO}: {ALERTA}",
+  "color": { "by": "ESTADO", "values": { "OK": "#D4EDDA", "VENCIDO": "#F8D7DA" }, "default": "#E6ECF2" },
+  "size": 8 }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `when` | siempre | Condición evaluada por fila de `source`. |
+| `each` | `false` | `true`: una franja por cada fila que cumpla. `false`: solo la primera. |
+| `text` | — | Texto (plantilla con la fila). |
+| `color` | `#E6ECF2` | Color fijo (`"#FFF4CE"`) o según una columna: `{ "by", "values", "default" }`. |
+| `size` | `8` | Tamaño de letra (PDF). |
+
+### `texto`
+
+Uno o varios párrafos con texto enriquecido.
+
+```json
+{ "type": "texto", "source": "DOCS", "align": "justify", "size": 10, "lineHeight": 1.35,
+  "paragraphGap": 2, "indent": 0, "color": "#000000", "font": "times", "bold": false, "italic": false,
+  "text": [ "Estimado(a) **{NOMBRE}**:", "Su saldo al {TODAY} es [c=#AA1E1E]**{SALDO|money}**[/c]." ] }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `text` | — | Texto o arreglo de párrafos. En un texto, `\n` separa párrafos. |
+| `align` | `left` | `left`, `center`, `right`, `justify`. |
+| `size` | `10` | Tamaño de letra. |
+| `lineHeight` | `1.35` (PDF), `1.15` (Word) | Interlineado. |
+| `paragraphGap` | media línea | Espacio entre párrafos en mm. |
+| `indent` | `0` | Sangría izquierda en mm. |
+| `color`, `font`, `bold`, `italic` | — | Estilo base del párrafo. |
+| `x`, `y`, `width` | — | **Posición fija** (solo PDF, en la página actual). Con `y` no mueve el flujo del resto del documento. |
+
+**Marcas de texto enriquecido:**
+
+| Marca | Resultado |
+|---|---|
+| `**texto**` | negrita |
+| `*texto*` | cursiva |
+| `***texto***` | negrita y cursiva |
+| `~~texto~~` | tachado |
+| `++texto++` | subrayado |
+| `[f=times]…[/f]` | tipo de letra: `helvetica`, `times`, `courier` |
+| `[c=#AA1E1E]…[/c]` | color |
+| `\*` | asterisco literal (en JSON: `"\\*"`) |
+
+Las marcas se pueden anidar: `[c=#19783C]***{SAL|money}***[/c]`.
+
+### `imagen`
+
+PNG o JPG desde una URL o desde una columna BLOB.
+
+```json
+{ "type": "imagen", "url": "#APP_FILES#logo.png", "width": 40, "align": "left", "gap": 3 }
+{ "type": "imagen", "source": "DOCS", "field": "FOTO", "width": 35 }
+{ "type": "imagen", "url": "#APP_FILES#logo.png", "width": 30, "x": 14, "y": 277 }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `url` | — | `#APP_FILES#`, `#WORKSPACE_FILES#` e `#IMAGE_PREFIX#` se resuelven con `apex.env`. Se descarga una vez y se reutiliza. |
+| `field` | — | Columna BLOB (o texto base64 / *data URL*) de `source`, o del documento si no hay `source`. |
+| `width` / `height` | `40` de ancho | Con uno solo se respeta la proporción. |
+| `align` | `left` | `left`, `center`, `right` (PDF y Word). |
+| `gap` | `3` | Espacio después, en mm. |
+| `x`, `y` | — | Posición fija (solo PDF). |
+
+Si la columna viene vacía, la imagen se omite. En Excel la imagen se ancla en la columna A de la fila actual.
+
+### `linea`
+
+```json
+{ "type": "linea", "width": 70, "align": "center", "thickness": 0.25, "color": "#000000", "gapBefore": 1, "gap": 1 }
+{ "type": "linea", "x1": 197, "y1": 275, "x2": 197, "y2": 291, "color": "#9BB5A3" }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `width` | todo el ancho | Largo en mm. |
+| `align` | `left` | `left`, `center`, `right`. |
+| `thickness` | `0.3` | Grosor en mm. |
+| `color` | `#000000` | |
+| `gapBefore` / `gap` | `0` / `2` | Espacio antes / después. |
+| `x1`, `y1`, `x2`, `y2` | — | Línea en posición fija, horizontal o vertical (solo PDF). |
+
+### `espacio` y `salto`
+
+```json
+{ "type": "espacio", "height": 10 }
+{ "type": "salto" }
+```
+
+`espacio` agrega `height` mm (defecto `6`). `salto` empieza una página nueva. En Excel ambos dejan una fila vacía.
+
+## Qué soporta cada formato
+
+| Sección / opción | PDF | Excel | Word |
+|---|:---:|:---:|:---:|
+| `header` | ✓ | ✓ | ✓ |
+| `ficha` | ✓ | ✓ valores reales | ✓ |
+| `tabla` | ✓ | ✓ fórmulas, filtro | ✓ |
+| `tabla.groups` | ✓ | ✓ | ✓ |
+| `tabla.repeatHeader` | ✓ | — | siempre |
+| `alerta` | ✓ | ✓ | ✓ |
+| `texto` enriquecido | ✓ | ✓ | ✓ |
+| `texto` / `imagen` con `x`, `y` | ✓ | — | se ignora la posición |
+| `imagen` | ✓ | ✓ | ✓ |
+| `linea` | ✓ | — | ✓ horizontal |
+| `linea` con `x1…y2` | ✓ | — | — |
+| `espacio` | ✓ | fila vacía | ✓ |
+| `salto` | ✓ | fila vacía | ✓ |
+| `footer` | ✓ | izquierda + *Página X de Y* | ✓ |
+| `hooks.pdfCell` | ✓ | — | — |
+
+Use `"formats"` para ocultar una sección donde no aplica: `{ "type": "salto", "formats": ["pdf"] }`.
+
+## Excel: hojas
+
+```json
+"xlsx": {
+  "sheets": [
+    { "name": "Operación", "sections": ["enc", "ficha", "pend"] },
+    { "name": "Plan {DOC.NRO}", "sections": ["plan"] }
+  ]
+}
+```
+
+| Propiedad | Descripción |
+|---|---|
+| `sheets[].name` | Nombre (plantilla, máx. 31 caracteres; se limpian `[ ] \ / : * ? " < > \|`). Nombres repetidos reciben `_2`, `_3`… |
+| `sheets[].sections` | Secciones por `id` o por posición (`0`, `1`…). Sin `sections`, todas. |
+| `sheets[].mergeName` | Nombre de la hoja en salida `merge` (una hoja por documento). Defecto: `{DOC.DOC_KEY}` o `{DOC.DOC_KEY} <name>`. |
+| `sheetName` | Nombre de la única hoja si no define `sheets`. Defecto `Reporte`. |
+
+## Lotes y resumen
+
+```json
+"batch": {
+  "zipName": "planes_{PARAM.FORMATO}_{TODAY}",
+  "mergeName": "planes_unidos",
+  "chunkSize": 5,
+  "maxDocs": 3000,
+  "summary": {
+    "fileName": "00_resumen",
+    "footer": { "right": "Página {PAGE} de {PAGES}" },
+    "xlsx": { "sheets": [ { "name": "Resumen" } ] },
+    "sections": [
+      { "type": "header", "title": "Resumen del lote {LOTE.ID}" },
+      { "type": "tabla", "source": "RES" } ]
+  }
+}
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `zipName` | `reportes.zip` | Nombre del ZIP. Dispone de `{FORMATO}` (`pdf`, `excel`, `word`, `todos`). |
+| `mergeName` | `zipName` o `fileName` | Nombre del archivo en salida `merge`. |
+| `chunkSize` | `5` | Documentos por bloque antes de devolver el control al navegador. |
+| `maxDocs` | sin límite | Rechaza lotes más grandes. |
+| `summary` | — | Documento extra al inicio del ZIP (solo salida `zip`). Usa las fuentes marcadas `summary`. Hereda `page` y `footer`. |
+| `summary.layout` | — | Diseño completo distinto para el resumen (en lugar de `sections`/`footer`/`xlsx`). |
+
+En el resumen no hay documento actual: use `{FUENTE.COL}` o `source` para leer datos.
+
+## Reutilizar partes: `defs`
+
+`"@NOMBRE"` se reemplaza por `defs.NOMBRE` en cualquier lugar del diseño. Dentro de un arreglo, si `defs.NOMBRE` también es arreglo, sus elementos se insertan en ese lugar.
+
+```json
+{
+  "defs": {
+    "BASE": [ { "col": "NRO", "label": "#" }, { "col": "FECHA", "label": "Fecha", "fmt": "date" } ],
+    "ROJO": [ { "when": "SALDO < 0", "color": "#AA1E1E" } ],
+    "TABLA_PLAN": { "type": "tabla", "source": "PLAN", "columns": [ "@BASE", { "col": "SALDO", "cellStyle": "@ROJO" } ] }
+  },
+  "sections": [ "@TABLA_PLAN" ]
+}
+```
+
+## Word desde plantilla (`docx-template`)
+
+En lugar de dibujar secciones, llena un `.docx` hecho en Word. Del diseño solo se usan `fileName` y `batch`.
+
+| Marcador en el `.docx` | Valor |
+|---|---|
+| `{CAMPO}` | Columna del documento (`DOCS`) o parámetro. |
+| `{FUENTE.CAMPO}` | Primera fila de otra fuente. |
+| `{DOC.CAMPO}`, `{PARAM.X}` | Documento / parámetro. |
+| `{CAMPO\|money}` | Con [formato](#formatos-de-valor). |
+| `{#FUENTE}…{/FUENTE}` | Repite el bloque por cada fila de la fuente. Dentro de una fila de tabla, repite la fila. |
+| `{NOW}`, `{TODAY}` | Fecha y hora. |
+
+Escriba cada marcador de corrido, sin cambiar el formato en medio: Word puede partirlo en fragmentos y no se reconocería. Ver el ejemplo [`06-plantilla-word`](../examples/06-plantilla-word).

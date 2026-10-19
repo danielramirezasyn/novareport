@@ -1,0 +1,45 @@
+{
+  "page": { "size": "letter", "orientation": "landscape", "theme": { "primary": "#14532D", "zebra": "#F0F7F2", "totals": "#DCEFE2" } },
+  "title": "Planilla por departamento",
+  "fileName": "planilla_{TODAY}",
+  "emptyMessage": "No hay empleados para el filtro seleccionado.",
+  "defs": {
+    "IDENT": [
+      { "col": "EMPNO", "label": "N.°", "align": "center", "width": 14 },
+      { "col": "ENAME", "label": "Nombre", "bold": true },
+      { "col": "JOB", "label": "Puesto" }
+    ],
+    "VERDE": [ { "when": "COMM > 0", "color": "#19783C", "bold": true } ]
+  },
+  "xlsx": {
+    "sheets": [
+      { "name": "Resumen", "sections": ["enc", "deptos"] },
+      { "name": "Detalle", "sections": ["detalle"] }
+    ]
+  },
+  "sections": [
+    { "id": "enc", "type": "header", "title": "Planilla por departamento", "subtitle": "Salarios y comisiones", "right": "Generado: {NOW}" },
+    { "id": "deptos", "type": "tabla", "source": "DEPTOS", "title": "Resumen", "totals": ["EMPLEADOS", "SALARIOS", "COMISIONES"],
+      "columns": [
+        { "col": "DNAME", "label": "Departamento", "bold": true },
+        { "col": "LOC", "label": "Ubicación" },
+        { "col": "EMPLEADOS", "label": "Empleados", "fmt": "int" },
+        { "col": "SALARIOS", "label": "Salarios", "fmt": "money" },
+        { "col": "COMISIONES", "label": "Comisiones", "fmt": "money" } ],
+      "rowStyle": [ { "when": "EMPLEADOS == 0", "color": "#9A9A9A" } ] },
+    { "id": "aviso", "type": "alerta", "source": "DEPTOS", "when": "EMPLEADOS == 0", "each": true, "formats": ["pdf", "docx"],
+      "text": "El departamento {DNAME} ({LOC}) no tiene empleados.", "color": "#FFF4CE" },
+    { "id": "salto", "type": "salto", "formats": ["pdf"] },
+    { "id": "detalle", "type": "tabla", "source": "EMP", "title": "Detalle de empleados", "totals": ["SAL", "COMM", "TOTAL"],
+      "groups": [ { "cols": 3 }, { "label": "Asignación", "cols": 2 }, { "label": "Compensación", "cols": 3 } ],
+      "columns": [ "@IDENT",
+        { "col": "DNAME", "label": "Departamento" },
+        { "col": "HIREDATE", "label": "Ingreso", "fmt": "date" },
+        { "col": "SAL", "label": "Salario", "fmt": "money" },
+        { "col": "COMM", "label": "Comisión", "fmt": "money", "cellStyle": "@VERDE" },
+        { "col": "TOTAL", "label": "Total", "fmt": "money", "bold": true } ],
+      "rowStyle": [ { "when": "JOB == 'PRESIDENT'", "fill": "#E8F3EC", "bold": true } ] }
+  ],
+  "footer": { "left": "Uso interno", "right": "Página {PAGE} de {PAGES}" },
+  "batch": { "zipName": "planilla_{FORMATO}_{TODAY}" }
+}

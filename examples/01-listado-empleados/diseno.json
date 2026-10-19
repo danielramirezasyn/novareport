@@ -1,0 +1,26 @@
+{
+  "page": { "size": "letter", "orientation": "portrait", "theme": { "primary": "#1F4E79" } },
+  "fileName": "empleados_{TODAY}",
+  "sections": [
+    { "type": "header", "title": "Planilla de empleados", "subtitle": "Resumen por departamento y detalle", "right": "{NOW}" },
+    { "type": "tabla", "source": "DEPTOS", "title": "Por departamento", "totals": ["EMPLEADOS", "SALARIOS"],
+      "columns": [
+        { "col": "DNAME", "label": "Departamento", "bold": true },
+        { "col": "LOC", "label": "Ubicación" },
+        { "col": "EMPLEADOS", "label": "Empleados", "fmt": "int" },
+        { "col": "SALARIOS", "label": "Salarios", "fmt": "money" } ] },
+    { "type": "tabla", "source": "EMP", "title": "Detalle", "totals": ["SAL", "COMM"],
+      "columns": [
+        { "col": "EMPNO", "label": "N.°", "align": "center" },
+        { "col": "ENAME", "label": "Nombre" },
+        { "col": "JOB", "label": "Puesto" },
+        { "col": "DNAME", "label": "Departamento" },
+        { "col": "HIREDATE", "label": "Ingreso", "fmt": "date", "align": "center" },
+        { "col": "SAL", "label": "Salario", "fmt": "money" },
+        { "col": "COMM", "label": "Comisión", "fmt": "money",
+          "cellStyle": [ { "when": "COMM > 0", "color": "#19783C", "bold": true } ] } ],
+      "rowStyle": [ { "when": "SAL >= 3000", "fill": "#E8F3EC" } ] },
+    { "type": "texto", "size": 8, "color": "#787878", "text": "Filas en verde: salario igual o mayor a 3,000. *Reporte generado con novaReport.*" }
+  ],
+  "footer": { "left": "Confidencial", "right": "Página {PAGE} de {PAGES}" }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "novareport-test",
+  "private": true,
+  "description": "Prueba novaReport fuera de APEX (Node) con datos de ejemplo EMP/DEPT",
+  "scripts": {
+    "test": "node run.js",
+    "test:min": "node run.js --min",
+    "plantilla": "node crear-plantilla.js"
+  },
+  "devDependencies": {
+    "docx": "9.5.1",
+    "docxtemplater": "3.60.0",
+    "exceljs": "4.4.0",
+    "jspdf": "4.2.1",
+    "jspdf-autotable": "3.8.4",
+    "jszip": "3.10.1",
+    "pizzip": "3.1.8"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "overrides": {
+    "jspdf-autotable": {
+      "jspdf": "$jspdf"
+    }
+  },
+  "//": "jsPDF 4.2.1 + AutoTable 3.8.4 son las versiones que carga el plugin; AutoTable declara jspdf ^2.5.1 como peer, por eso el override."
+}

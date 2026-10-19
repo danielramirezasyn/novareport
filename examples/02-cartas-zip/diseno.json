@@ -1,0 +1,39 @@
+{
+  "page": { "size": "letter", "orientation": "portrait", "margin": 22, "font": "times" },
+  "fileName": "carta_{DOC.ENAME}",
+  "sections": [
+    { "type": "texto", "text": "[f=helvetica][c=#1F4E79]**EMPRESA DE EJEMPLO, S.A.**[/c][/f]", "size": 16 },
+    { "type": "texto", "text": "[f=helvetica]*Recursos Humanos*[/f]", "size": 9, "color": "#787878" },
+    { "type": "espacio", "height": 6 },
+    { "type": "texto", "text": "Ciudad, {TODAY}", "align": "right" },
+    { "type": "espacio", "height": 6 },
+    { "type": "texto", "source": "DOCS", "lineHeight": 1.2, "paragraphGap": 0, "text": [
+      "Señor(a)", "**{ENAME}**", "{JOB} - {DNAME}" ] },
+    { "type": "espacio", "height": 6 },
+    { "type": "texto", "text": "**Ref.: ++*Ajuste salarial*++**" },
+    { "type": "texto", "text": "Estimado(a) colaborador(a):" },
+    { "type": "texto", "source": "DOCS", "align": "justify", "text": [
+      "Nos complace informarle que, a partir del próximo período de pago, su salario mensual cambia de ~~{SAL|money}~~ a [c=#19783C]***{SAL_NUEVO|money}***[/c].",
+      "Agradecemos su compromiso desde el *{HIREDATE}*. Este ajuste se aplicará de forma automática en la planilla." ] },
+    { "type": "texto", "text": "Atentamente," },
+    { "type": "espacio", "height": 18 },
+    { "type": "linea", "width": 60, "align": "left", "thickness": 0.25, "gap": 1 },
+    { "type": "texto", "lineHeight": 1.2, "paragraphGap": 0, "text": [ "**Recursos Humanos**", "*Empresa de Ejemplo, S.A.*" ] }
+  ],
+  "footer": { "left": "Documento generado automáticamente", "right": "Página {PAGE} de {PAGES}" },
+  "batch": {
+    "zipName": "cartas_{TODAY}",
+    "chunkSize": 10,
+    "maxDocs": 2000,
+    "summary": {
+      "fileName": "00_listado",
+      "footer": { "right": "Página {PAGE} de {PAGES}" },
+      "sections": [
+        { "type": "header", "title": "Cartas generadas", "right": "{NOW}" },
+        { "type": "tabla", "source": "LISTA", "totals": ["SAL", "SAL_NUEVO"], "columns": [
+          { "col": "ENAME", "label": "Nombre" }, { "col": "JOB", "label": "Puesto" },
+          { "col": "SAL", "label": "Salario actual", "fmt": "money" },
+          { "col": "SAL_NUEVO", "label": "Salario nuevo", "fmt": "money", "bold": true } ] } ]
+    }
+  }
+}

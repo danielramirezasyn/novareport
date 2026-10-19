@@ -1,0 +1,14 @@
+{
+  "page": { "size": "letter", "orientation": "portrait", "margin": 20 },
+  "fileName": "ficha_{DOC.ENAME}",
+  "sections": [
+    { "type": "header", "title": "Ficha de empleado", "right": "{NOW}" },
+    { "type": "imagen", "field": "FOTO", "width": 35, "align": "left" },
+    { "type": "ficha", "source": "DOCS", "columns": 1, "fields": [
+      { "label": "N.°", "value": "{DOC_KEY}" },
+      { "label": "Nombre", "value": "{ENAME}" },
+      { "label": "Puesto", "value": "{JOB}" } ] }
+  ],
+  "footer": { "right": "Página {PAGE} de {PAGES}" },
+  "batch": { "zipName": "fichas_{TODAY}" }
+}
