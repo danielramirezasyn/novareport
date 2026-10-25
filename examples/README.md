@@ -1,6 +1,8 @@
 # Ejemplos
 
-Seis ejemplos listos para copiar en una aplicación APEX. Todos usan las tablas de muestra **EMP / DEPT** (*SQL Workshop → Utilities → Sample Datasets*).
+Siete ejemplos listos para copiar en una aplicación APEX. Todos usan las tablas de muestra **EMP / DEPT**.
+
+**Antes de empezar:** ejecute [`00-tablas-emp-dept.sql`](00-tablas-emp-dept.sql) en su esquema (*SQL Workshop → SQL Scripts*). Crea `DEPT`, `EMP` y `EMP_FOTO` con los 4 departamentos y 14 empleados clásicos. Si las tablas ya existen no las toca, y solo inserta datos cuando están vacías. También puede instalarlas desde *SQL Workshop → Utilities → Sample Datasets*.
 
 | Archivo | Va en el atributo |
 |---|---|
@@ -17,6 +19,8 @@ Todos se pueden generar sin APEX con `cd test && npm install && npm test` (ver [
 | 04 | [Imagen desde BLOB](#04--imagen-desde-blob) | PDF / Word · ZIP | `imagen` con `field` |
 | 05 | [Excel con varias hojas](#05--excel-con-varias-hojas) | Excel (también PDF / Word) · Archivo | `xlsx.sheets`, `groups`, `defs`, `formats` |
 | 06 | [Plantilla Word](#06--plantilla-word) | Word desde plantilla · ZIP o Archivo | `docx-template`, bucle en fila de tabla |
+| 07 | [Gráficos y códigos](#07--gráficos-y-códigos) | PDF / Excel / Word · Archivo | `grafico`, `codigo` (QR y Code 128), `breakBy` con subtotales, `watermark` |
+| 08 | [Factura con columnas](#08--factura-con-columnas) | PDF / Excel / Word · Archivo | `columnas`, `fmt: letras`, `when` en una sección |
 
 ---
 
@@ -130,13 +134,7 @@ select e.empno, e.ename, e.job,
 
 Ficha por empleado con su foto guardada en una columna BLOB.
 
-**Antes de usarlo:**
-
-```sql
-create table emp_foto (empno number primary key, foto blob);
-```
-
-Cargue fotos **PNG o JPG** (por ejemplo con un *File Browse* de APEX que guarde en `emp_foto`).
+**Antes de usarlo:** la tabla `EMP_FOTO` la crea [`00-tablas-emp-dept.sql`](00-tablas-emp-dept.sql). Cargue fotos **PNG o JPG** (por ejemplo con un *File Browse* de APEX que guarde en `emp_foto`).
 
 **Qué observar**
 
@@ -206,3 +204,44 @@ function (o) { o.templateUrl = apex.env.APP_FILES + 'plantillas/equipo.docx'; re
 Del diseño solo se usan `fileName` y `batch`; el formato visual lo da la plantilla.
 
 La plantilla del repositorio se genera con `npm run plantilla` (en `test/`).
+
+---
+
+## 07 · Gráficos y códigos
+
+[`07-graficos-codigos`](07-graficos-codigos)
+
+Resumen de planilla con las secciones nuevas de la versión 1.7.0:
+
+| Qué | Cómo |
+|---|---|
+| Barras agrupadas con valores | `grafico` con `"chart": "bar"`, dos `series` y `"values": true` |
+| Anillo con porcentajes | `grafico` con `"chart": "doughnut"` y `"values": "pct"` |
+| Quiebre por departamento con subtotales | `tabla` con `"breakBy": "DNAME"`, `breakTitle` con `{COUNT}`, `breakLabel` y `totals` |
+| QR | `codigo` con `"kind": "qr"` |
+| Código de barras | `codigo` con `"kind": "code128"` |
+| Marca de agua condicional | `"watermark": { "text": "BORRADOR", "when": "!PARAM.FINAL" }` |
+
+La consulta `EMP` viene ordenada por `DNAME`: los quiebres agrupan filas consecutivas.
+
+La marca de agua sale mientras no llegue el parámetro `FINAL`. Para la versión final, use un botón con `data-final="S"`.
+
+**Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**. En Excel no hay marca de agua; los gráficos y códigos van como imagen y los subtotales como `=SUBTOTAL()`.
+
+---
+
+## 08 · Factura con columnas
+
+[`08-factura-columnas`](08-factura-columnas)
+
+Factura con las secciones de la versión 1.11.0. Usa solo `DUAL`: no necesita EMP / DEPT.
+
+| Qué | Cómo |
+|---|---|
+| Cliente a la izquierda; código de barras y fecha a la derecha | `columnas` con `"widths": [60, 40]` |
+| Monto en letras junto a los totales | `alerta` con `{DOC.TOTAL\|letras:BALBOA/BALBOAS}` y `ficha` en otra fila de `columnas` |
+| Dos firmas en la misma línea | `columnas` de 50 / 50 con `espacio`, `linea` y `texto` |
+| Firmas opcionales | `"when": "PARAM.FIRMAS != 'N'"` en la fila de firmas: un botón con `data-firmas="N"` las quita |
+
+**Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**. PDF y Word se ven iguales; en Excel cada casilla ocupa su propio bloque de columnas.
+

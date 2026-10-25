@@ -17,7 +17,29 @@ begin
     return l_n > 0;
 end nr_is_item;
 
-procedure nr_write_json(p_sources in varchar2, p_params in varchar2, p_summary in boolean) is
+-- Origen "Resolver": llama a la función configurada; el navegador solo envía ID + parámetros.
+-- Contrato: function f(p_id in varchar2, p_params in clob) return clob
+--   -> { "sources": "--@X ...", "layout": {..} | "..", "params": {"P": valor}, "types": {"P": "text|number|date"}, "templateUrl": ".." }
+function nr_resolve(p_fn in varchar2, p_id in varchar2, p_params in clob) return json_object_t is
+    l_fn  varchar2(400) := trim(p_fn);
+    l_res clob;
+begin
+    if l_fn is null or not regexp_like(l_fn, '^[A-Za-z][A-Za-z0-9_$#]*(\.[A-Za-z][A-Za-z0-9_$#]*){0,2}$') then
+        raise_application_error(-20003, 'Configure la función resolver del plugin (p. ej. nrd_catalogo_pkg.resolver).');
+    end if;
+    if trim(p_id) is null then
+        raise_application_error(-20004, 'Indique el reporte a generar (data-report).');
+    end if;
+    execute immediate 'begin :r := ' || dbms_assert.qualified_sql_name(l_fn) || '(p_id => :i, p_params => :p); end;'
+        using out l_res, in trim(p_id), in p_params;
+    if l_res is null then
+        raise_application_error(-20005, 'La función resolver no devolvió el reporte.');
+    end if;
+    return json_object_t.parse(l_res);
+end nr_resolve;
+
+procedure nr_write_json(p_sources in clob, p_params in varchar2, p_summary in boolean,
+                        p_res in json_object_t default null) is
     type t_src is record (name varchar2(128), flags varchar2(400), sql_text varchar2(32767));
     type t_srcs is table of t_src index by pls_integer;
     l_srcs   t_srcs;
@@ -34,8 +56,16 @@ procedure nr_write_json(p_sources in varchar2, p_params in varchar2, p_summary i
     l_rows   pls_integer := 0;
     l_dt     varchar2(64);
     l_blob   blob;
+    l_rp     json_object_t;   -- resolver: parámetros validados
+    l_rt     json_object_t;   -- resolver: tipos
+    l_ty     varchar2(30);
+    l_el     json_element_t;
+    l_keys   json_key_list;
 begin
-    if p_params is not null then
+    if p_res is not null then
+        l_rp := case when p_res.has('params') then p_res.get_object('params') else json_object_t() end;
+        l_rt := case when p_res.has('types') then p_res.get_object('types') else json_object_t() end;
+    elsif p_params is not null then
         apex_json.parse(l_vals, p_params);
     end if;
     l_lines := apex_string.split(p_sources, chr(10));
@@ -68,7 +98,21 @@ begin
             l_bind := upper(substr(regexp_substr(l_scan, ':[A-Za-z][A-Za-z0-9_$#]*', 1, b), 2));
             if instr(l_seen, ',' || l_bind || ',') = 0 then
                 l_seen := l_seen || l_bind || ',';
-                if not nr_is_item(l_bind) then
+                if p_res is not null then
+                    -- Resolver: solo APP_* (sesión) y los parámetros validados por la función; el resto NULL
+                    l_ty := case when l_rt.has(l_bind) then l_rt.get_string(l_bind) end;
+                    if l_bind like 'APP\_%' escape '\' then
+                        apex_exec.add_parameter(l_parms, l_bind, v(l_bind));
+                    elsif not l_rp.has(l_bind) or l_rp.get(l_bind).is_null then
+                        apex_exec.add_parameter(l_parms, l_bind, to_char(null));
+                    elsif l_ty = 'number' then
+                        apex_exec.add_parameter(l_parms, l_bind, l_rp.get_number(l_bind));
+                    elsif l_ty = 'date' then
+                        apex_exec.add_parameter(l_parms, l_bind, to_date(l_rp.get_string(l_bind), 'YYYY-MM-DD'));
+                    else
+                        apex_exec.add_parameter(l_parms, l_bind, l_rp.get_string(l_bind));
+                    end if;
+                elsif not nr_is_item(l_bind) then
                     apex_exec.add_parameter(l_parms, l_bind,
                         case when p_params is not null then apex_json.get_varchar2(p_path => l_bind, p_values => l_vals) end);
                 end if;
@@ -79,7 +123,7 @@ begin
                      p_location        => apex_exec.c_location_local_db,
                      p_sql_query       => l_srcs(s).sql_text,
                      p_sql_parameters  => l_parms,
-                     p_auto_bind_items => true);
+                     p_auto_bind_items => p_res is null);
         l_cols := apex_exec.get_column_count(l_ctx);
         l_types := apex_t_varchar2();
         apex_json.open_object(l_srcs(s).name);
@@ -133,6 +177,25 @@ begin
         apex_exec.close(l_ctx);
     end loop;
     apex_json.close_object;
+    if p_res is not null then
+        -- Diseño y parámetros (para {PARAM.X}); las fuentes SQL nunca viajan al navegador
+        l_el := p_res.get('layout');
+        if l_el is null then
+            raise_application_error(-20006, 'La función resolver no devolvió el diseño.');
+        end if;
+        apex_json.write('layout', case when l_el.is_object then treat(l_el as json_object_t).to_clob else p_res.get_clob('layout') end);
+        if p_res.has('templateUrl') then
+            apex_json.write('templateUrl', p_res.get_string('templateUrl'));
+        end if;
+        apex_json.open_object('params');
+        l_keys := l_rp.get_keys;
+        if l_keys is not null then
+            for k in 1 .. l_keys.count loop
+                apex_json.write(l_keys(k), case when not l_rp.get(l_keys(k)).is_null then l_rp.get_string(l_keys(k)) end, p_write_null => true);
+            end loop;
+        end if;
+        apex_json.close_object;
+    end if;
     apex_json.close_object;
 exception
     when others then
@@ -161,6 +224,7 @@ begin
     l_r.function_param.put('pdfAction',   p_dynamic_action.attributes.get_varchar2('pdf_action'));
     l_r.function_param.put('templateUrl', p_dynamic_action.attributes.get_varchar2('template_url'));
     l_r.function_param.put('message',     p_dynamic_action.attributes.get_varchar2('message'));
+    l_r.function_param.put('origin',      nvl(p_dynamic_action.attributes.get_varchar2('origin'), 'attributes'));
     if l_init is not null then
         l_r.function_param.put_function(p_key => 'init', p_code => l_init, p_type => apex_javascript.c_type_function);
     end if;
@@ -173,12 +237,25 @@ function ajax(p_dynamic_action in apex_plugin.t_dynamic_action,
     return apex_plugin.t_dynamic_action_ajax_result is
     l_r   apex_plugin.t_dynamic_action_ajax_result;
     l_out clob;
+    l_res json_object_t;
 begin
-    apex_json.initialize_clob_output;
     begin
-        nr_write_json(p_sources => p_dynamic_action.attributes.get_varchar2('sources'),
-                      p_params  => apex_application.g_x01,
-                      p_summary => apex_application.g_x02 = 'Y');
+        if nvl(p_dynamic_action.attributes.get_varchar2('origin'), 'attributes') = 'resolver' then
+            -- Nunca se acepta SQL ni diseño del navegador: solo ID (x03) + parámetros (x01)
+            l_res := nr_resolve(p_fn     => p_dynamic_action.attributes.get_varchar2('resolver'),
+                                p_id     => apex_application.g_x03,
+                                p_params => apex_application.g_x01);
+            apex_json.initialize_clob_output;
+            nr_write_json(p_sources => l_res.get_clob('sources'),
+                          p_params  => null,
+                          p_summary => apex_application.g_x02 = 'Y',
+                          p_res     => l_res);
+        else
+            apex_json.initialize_clob_output;
+            nr_write_json(p_sources => p_dynamic_action.attributes.get_varchar2('sources'),
+                          p_params  => apex_application.g_x01,
+                          p_summary => apex_application.g_x02 = 'Y');
+        end if;
         l_out := apex_json.get_clob_output;
         apex_json.free_output;
     exception
@@ -187,7 +264,8 @@ begin
             apex_json.initialize_clob_output;
             apex_json.open_object;
             apex_json.write('ok', false);
-            apex_json.write('msg', regexp_replace(sqlerrm, '^ORA-\d+: ', ''));
+            -- sin el prefijo ORA-nnnnn ni la pila (ORA-06512) de la función resolver
+            apex_json.write('msg', regexp_replace(regexp_replace(sqlerrm, '^ORA-\d+: ', ''), '\s*ORA-06512:.*$', '', 1, 1, 'n'));
             apex_json.close_object;
             l_out := apex_json.get_clob_output;
             apex_json.free_output;

@@ -1,6 +1,6 @@
 # novaReport — PDF, Excel y Word para Oracle APEX
 
-[![Versión](https://img.shields.io/badge/versión-1.6.1-1F4E79)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versión-1.11.0-1F4E79)](CHANGELOG.md)
 [![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requisitos)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green)](LICENSE)
 
@@ -25,6 +25,7 @@ El servidor solo ejecuta las consultas; el documento se arma en el navegador con
 - [Estructura del repositorio](#estructura-del-repositorio)
 - [Seguridad](#seguridad)
 - [Problemas conocidos y limitaciones](#problemas-conocidos-y-limitaciones)
+- [novaReport Designer](#novareport-designer)
 - [Licencia y autor](#licencia-y-autor)
 
 ## Qué hace
@@ -33,7 +34,10 @@ El servidor solo ejecuta las consultas; el documento se arma en el navegador con
 |---|---|
 | **Un diseño, tres formatos** | El mismo JSON produce PDF, Excel (`.xlsx` con colores, totales con `=SUM()`, autofiltro, varias hojas) y Word (`.docx` editable). |
 | **Lotes** | Un archivo por documento dentro de un **ZIP**, con un documento de **resumen** opcional; o todos los documentos **unidos en un solo archivo**. |
-| **Diseño declarativo** | Encabezado, ficha de datos, tablas con totales, encabezados agrupados y estilos condicionales, alertas, texto enriquecido (negrita, cursiva, subrayado, tachado, colores, 3 letras), imágenes (URL o **BLOB**), líneas y elementos en **posición fija**. |
+| **Diseño declarativo** | Encabezado, ficha de datos, tablas con totales (suma, promedio, mínimo, máximo, conteo), quiebres con subtotales, encabezados agrupados y estilos condicionales, alertas, texto enriquecido (negrita, cursiva, subrayado, tachado, colores, 3 letras), imágenes (URL o **BLOB**), gráficos, **QR** y **Code 128**, marca de agua, líneas y elementos en **posición fija**. |
+| **Columnas** | Casillas **lado a lado** (logo y datos, cliente y totales, firmas) que se ven igual en PDF y Word, y como bloques de columnas en Excel. |
+| **Lógica en el diseño** | Secciones y columnas que aparecen **según condiciones** (`when`), montos **en letras** (`MIL DOSCIENTOS BALBOAS CON 50/100`) y formatos de valor. |
+| **Guardar en el servidor** | Además de entregarlo, sube el archivo generado a un proceso de su aplicación para **archivarlo, enviarlo por correo o registrar la ejecución**. |
 | **Plantillas Word** | Llena un `.docx` hecho en Word con `{CAMPO}` y bucles `{#TABLA}…{/TABLA}`. |
 | **Un archivo por fila** | Los atributos `data-*` del enlace o botón se convierten en binds (`:EMPNO`). |
 | **Sin objetos propios** | No crea tablas ni paquetes: ejecuta las consultas que usted define. |
@@ -55,7 +59,7 @@ Para actualizar, importe la versión nueva sobre la anterior: las acciones exist
 
 ## Primer reporte en 5 minutos
 
-Con las tablas de ejemplo **EMP / DEPT** (*SQL Workshop → Utilities → Sample Datasets*):
+Con las tablas de ejemplo **EMP / DEPT** (ejecute [`examples/00-tablas-emp-dept.sql`](examples/00-tablas-emp-dept.sql) o use *SQL Workshop → Utilities → Sample Datasets*):
 
 **1. Botón.** Cree un botón `EMPLEADOS_PDF` con *Action* = **Defined by Dynamic Action**.
 
@@ -158,7 +162,7 @@ Con salida **ZIP** obtiene un archivo por empleado; con **Un solo archivo**, tod
 
 ## Ejemplos
 
-En [`examples/`](examples) hay seis ejemplos listos para copiar, todos con EMP / DEPT:
+En [`examples/`](examples) hay ocho ejemplos listos para copiar (del 01 al 07 con EMP / DEPT):
 
 | Ejemplo | Qué muestra |
 |---|---|
@@ -168,6 +172,8 @@ En [`examples/`](examples) hay seis ejemplos listos para copiar, todos con EMP /
 | [04 · Imagen desde BLOB](examples/04-imagen-blob) | Foto guardada en una columna BLOB. |
 | [05 · Excel con varias hojas](examples/05-excel-multihoja) | Hojas por `id`, encabezado agrupado, `defs` reutilizables, secciones solo para PDF. |
 | [06 · Plantilla Word](examples/06-plantilla-word) | Un `.docx` hecho en Word con marcadores y una fila de tabla que se repite. |
+| [07 · Gráficos y códigos](examples/07-graficos-codigos) | Gráfico de barras y de anillo, tabla con quiebres y subtotales, QR, Code 128 y marca de agua condicional. |
+| [08 · Factura con columnas](examples/08-factura-columnas) | Cliente y código de barras lado a lado, monto en letras junto a los totales y dos firmas en la misma línea. |
 
 Cada carpeta trae `fuentes.sql` (atributo **Fuentes SQL**) y `diseno.json` (atributo **Diseño**). Guía paso a paso en [examples/README.md](examples/README.md).
 
@@ -198,7 +204,7 @@ Requiere Node 18 o superior.
 ```
 plugin/      Export del plugin, listo para importar en APEX
 src/         novareport.js (motor), novareport.min.js (versión publicada) y plugin.plsql (render / ajax)
-examples/    Ejemplos con EMP / DEPT: fuentes.sql + diseno.json (+ logo y plantilla)
+examples/    00-tablas-emp-dept.sql y ejemplos con EMP / DEPT: fuentes.sql + diseno.json (+ logo y plantilla)
 docs/        API.md y DISENO.md
 test/        Prueba en Node que genera todos los ejemplos sin APEX
 ```
@@ -214,13 +220,19 @@ test/        Prueba en Node que genera todos los ejemplos sin APEX
 
 | Tema | Detalle | Solución temporal |
 |---|---|---|
-| **Ítems a enviar** (1.6.1) | El valor del atributo (`P5_A,P5_B`) se pasa como selector jQuery y los ítems no se envían. | En *Initialization JavaScript Code*: `function (o) { if (o.items) { o.items = o.items.split(','); } return o; }` |
-| **Plantilla Word (URL)** (1.6.1) | No reemplaza `#APP_FILES#`. | `function (o) { o.templateUrl = apex.env.APP_FILES + 'plantillas/carta.docx'; return o; }` |
+| **Ítems a enviar** (1.6.1 a 1.10.0) | El valor del atributo (`P5_A,P5_B`) se pasaba como selector jQuery y los ítems no se enviaban. | Corregido en 1.11.0. En versiones anteriores: `function (o) { if (o.items) { o.items = o.items.split(','); } return o; }` |
+| **Plantilla Word (URL)** (1.6.1 a 1.10.0) | No reemplazaba `#APP_FILES#`. | Corregido en 1.11.0. En versiones anteriores: `function (o) { o.templateUrl = apex.env.APP_FILES + 'plantillas/carta.docx'; return o; }` |
 | Letras del PDF | Helvetica, Times y Courier no incluyen algunos símbolos, como **₡**. | Pendiente: soporte de fuentes TTF. |
 | Fechas | Las columnas `DATE` viajan como `DD/MM/YYYY`, sin hora. | `to_char(fecha, 'DD/MM/YYYY HH24:MI')` |
 | Posición fija | `x` / `y` solo aplican al PDF, en la página donde se dibujan. | |
 | Tamaño | Máximo 250,000 filas por petición; el lote y el ZIP se arman en memoria del navegador. | Divida lotes muy grandes. |
 | Atributos | 4000 caracteres. | Diseño en una variable JavaScript global. |
+
+## novaReport Designer
+
+**novaReport Designer** es una aplicación APEX construida sobre este plugin para diseñar reportes **sin escribir JSON**: lienzo de arrastrar y soltar con vista previa en PDF, Excel y Word, plantillas organizadas en carpetas, publicación por roles, la página **Mis reportes** para los usuarios finales (con parámetros y favoritos) y **Documentos guardados**.
+
+El Designer no forma parte de este repositorio. Los diseños que produce son el mismo JSON documentado en [docs/DISENO.md](docs/DISENO.md), así que lo que se arma en el Designer funciona con el plugin y viceversa. Si le interesa usarlo, abra un *issue* en este repositorio.
 
 ## Licencia y autor
 

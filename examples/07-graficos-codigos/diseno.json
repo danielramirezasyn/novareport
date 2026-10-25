@@ -1,0 +1,22 @@
+{
+  "page": { "size": "letter", "orientation": "portrait", "margin": 10 },
+  "title": "Resumen de planilla",
+  "fileName": "resumen_planilla_{TODAY}",
+  "watermark": { "text": "BORRADOR", "when": "!PARAM.FINAL" },
+  "sections": [
+    { "type": "header", "title": "Resumen de planilla", "subtitle": "Gráficos, subtotales por quiebre y códigos", "right": "{TODAY}" },
+    { "type": "grafico", "chart": "bar", "source": "DEPTOS", "category": "DNAME",
+      "series": [ { "col": "SALARIOS", "label": "Salarios" }, { "col": "COMISIONES", "label": "Comisiones" } ],
+      "title": "Salarios y comisiones por departamento", "fmt": "int", "values": true, "width": 120, "height": 65, "align": "center" },
+    { "type": "grafico", "chart": "doughnut", "source": "DEPTOS", "category": "DNAME", "series": ["EMPLEADOS"],
+      "title": "Empleados por departamento", "values": "pct", "width": 100, "height": 55, "align": "center" },
+    { "type": "tabla", "source": "EMP", "title": "Empleados por departamento",
+      "columns": [ { "col": "ENAME", "label": "Empleado" }, { "col": "JOB", "label": "Cargo" },
+                   { "col": "SAL", "label": "Salario", "fmt": "money" }, { "col": "COMM", "label": "Comisión", "fmt": "money" } ],
+      "breakBy": "DNAME", "breakTitle": "Departamento: {DNAME} ({COUNT} empleados)", "breakLabel": "Subtotal {DNAME}",
+      "totals": ["SAL", { "col": "COMM", "fn": "max" }], "totalsLabel": "Total general" },
+    { "type": "codigo", "kind": "qr", "value": "https://github.com/danielramirezasyn/novareport", "size": 28, "align": "right" },
+    { "type": "codigo", "kind": "code128", "value": "PLAN-2026-000123", "width": 60, "height": 12 }
+  ],
+  "footer": { "left": "novaReport — ejemplo 07", "right": "Página {PAGE} de {PAGES}" }
+}

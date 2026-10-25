@@ -1,0 +1,39 @@
+{
+  "page": { "size": "letter", "margin": 12 },
+  "title": "Factura {DOC.NUMERO}",
+  "fileName": "factura_{DOC.NUMERO}",
+  "sections": [
+    { "type": "header", "title": "Factura", "subtitle": "{EMPRESA.NOMBRE} · RUC {EMPRESA.RUC}", "right": "N.º {DOC.NUMERO}" },
+
+    { "type": "columnas", "widths": [60, 40], "cols": [
+      [ { "type": "texto", "size": 9, "text": "**Facturar a**\n{DOC.CLIENTE}\nCédula {DOC.CEDULA}\n{DOC.DIRECCION}" } ],
+      [ { "type": "codigo", "kind": "code128", "value": "{DOC.NUMERO}", "height": 10, "align": "right" },
+        { "type": "ficha", "columns": 1, "labelWidth": 22, "fields": [
+          { "label": "Fecha", "value": "{DOC.FECHA}" },
+          { "label": "Emisor", "value": "{EMPRESA.NOMBRE}" } ] } ]
+    ] },
+
+    { "type": "tabla", "source": "ITEMS", "title": "Detalle", "totals": ["IMPORTE"], "totalsLabel": "Subtotal",
+      "columns": [
+        { "col": "DESCRIPCION", "label": "Descripción" },
+        { "col": "CANTIDAD", "label": "Cant.", "fmt": "int" },
+        { "col": "PRECIO", "label": "Precio B/.", "fmt": "money" },
+        { "col": "IMPORTE", "label": "Importe B/.", "fmt": "money" } ] },
+
+    { "type": "columnas", "widths": [55, 45], "cols": [
+      [ { "type": "alerta", "source": "EMPRESA", "text": "Son: {DOC.TOTAL|letras:BALBOA/BALBOAS}", "color": "#FFF4CE", "size": 9 } ],
+      [ { "type": "ficha", "columns": 1, "labelWidth": 30, "fields": [
+          { "label": "Subtotal B/.", "value": "{DOC.SUBTOTAL}", "fmt": "money" },
+          { "label": "ITBMS 7% B/.", "value": "{DOC.ITBMS}", "fmt": "money" },
+          { "label": "Total B/.", "value": "{DOC.TOTAL}", "fmt": "money" } ] } ]
+    ] },
+
+    { "type": "columnas", "widths": [50, 50], "when": "PARAM.FIRMAS != 'N'", "cols": [
+      [ { "type": "espacio", "height": 14 }, { "type": "linea", "width": 60, "align": "center" },
+        { "type": "texto", "text": "Entregado por", "align": "center", "size": 9 } ],
+      [ { "type": "espacio", "height": 14 }, { "type": "linea", "width": 60, "align": "center" },
+        { "type": "texto", "text": "Recibido por", "align": "center", "size": 9 } ]
+    ] }
+  ],
+  "footer": { "left": "{EMPRESA.NOMBRE} · {EMPRESA.DIRECCION}", "right": "Página {PAGE} de {PAGES}" }
+}

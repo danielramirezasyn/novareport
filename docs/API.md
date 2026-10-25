@@ -45,6 +45,8 @@ El diseño JSON (secciones, columnas, estilos) está en [DISENO.md](DISENO.md).
 
 | # | Atributo | Clave interna | Tipo | Valor por defecto | Descripción |
 |---|---|---|---|---|---|
+| 0 | **Origen** | `origin` | Lista | `attributes` | `attributes`: fuentes y diseño en esta acción. `resolver`: los decide una función PL/SQL por ID de reporte. Ver [§3.1](#31-origen-resolver). |
+| 0 | **Función resolver** | `resolver` | Texto | `mi_pkg.resolver` | Solo con origen `resolver`. |
 | 1 | **Fuentes SQL** | `sources` | Textarea | — | Una o varias consultas, cada una precedida de `--@NOMBRE`. Ver [§3](#3-fuentes-sql). |
 | 2 | **Diseño (JSON)** | `layout` | Textarea | — | El diseño en JSON, o la ruta a una variable JavaScript global que lo contenga (`misDisenos.carta`). |
 | 3 | **Formato** | `format` | Lista | `pdf` | `pdf`, `xlsx`, `docx`, `docx-template` o `all` (PDF + Excel + Word). |
@@ -62,13 +64,13 @@ El diseño JSON (secciones, columnas, estilos) está en [DISENO.md](DISENO.md).
 > ```
 > Atributo **Diseño**: `misDisenos.plan`
 
-> **Ítems a enviar.** En la versión 1.6.1 el atributo se pasa a `apex.server.plugin` tal como lo guarda APEX (`P5_A,P5_B`), y ese texto se interpreta como selector jQuery, por lo que los ítems **no** se envían. Mientras se corrige, conviértalo en el código de inicialización:
+> **Ítems a enviar.** En las versiones 1.6.1 a 1.8.0 el atributo se pasa a `apex.server.plugin` tal como lo guarda APEX (`P5_A,P5_B`), y ese texto se interpreta como selector jQuery, por lo que los ítems **no** se envían. Mientras se corrige, conviértalo en el código de inicialización:
 > ```js
 > function (o) { if (o.items) { o.items = o.items.split(','); } return o; }
 > ```
 > Alternativa sin código: una acción *Execute Server-side Code* previa con *Items to Submit*, o ítems ya guardados en sesión.
 
-> **Plantilla Word y `#APP_FILES#`.** En la versión 1.6.1 el atributo **Plantilla Word (URL)** se usa tal cual: no reemplaza `#APP_FILES#` ni las sustituciones de APEX. Use una URL completa o arme la ruta en el código de inicialización:
+> **Plantilla Word y `#APP_FILES#`.** En las versiones 1.6.1 a 1.8.0 el atributo **Plantilla Word (URL)** se usa tal cual: no reemplaza `#APP_FILES#` ni las sustituciones de APEX. Use una URL completa o arme la ruta en el código de inicialización:
 > ```js
 > function (o) { o.templateUrl = apex.env.APP_FILES + 'plantillas/carta.docx'; return o; }
 > ```
@@ -114,6 +116,41 @@ select count(*) total from emp
 | Cualquier otro (`:EMPNO`, `:DET`) | Atributo `data-*` del elemento que disparó la acción ([§5](#5-parámetros-data-)), o `NULL` si no existe. |
 
 Un bind se considera ítem si existe en la página actual, en la página 0 o como ítem de aplicación. Los binds dentro de literales (`'...'`) y comentarios (`--`) se ignoran.
+
+### 3.1 Origen "Resolver"
+
+Con **Origen** = `resolver` el navegador **solo envía el ID del reporte y los parámetros**; las fuentes SQL y el diseño nunca viajan desde el navegador. El plugin llama a la función configurada en **Función resolver**:
+
+```sql
+function resolver(p_id in varchar2, p_params in clob) return clob;
+-- p_id:     ID del reporte (data-report del elemento, o o.report en Initialization Code)
+-- p_params: {"NOMBRE": "valor", ...} tal como llega del navegador
+```
+
+La función valida acceso y parámetros (levanta un error si no corresponde) y devuelve:
+
+```json
+{ "sources": "--@DOCS\nselect ...",
+  "layout":  { "sections": [] },
+  "params":  { "EMPLEADO": 7, "DESDE": "2026-10-01", "CUENTA": "1001-22" },
+  "types":   { "EMPLEADO": "number", "DESDE": "date", "CUENTA": "text" },
+  "templateUrl": "opcional, para docx-template" }
+```
+
+| Bind en las fuentes | Valor en modo resolver |
+|---|---|
+| `:APP_*` | Valor de sesión |
+| Nombre presente en `params` | Valor devuelto por la función: `number` → NUMBER, `date` (`YYYY-MM-DD`) → DATE, otro → VARCHAR2 |
+| Cualquier otro (incluidos ítems de página) | `NULL` (no hay enlace automático de ítems) |
+
+Los `params` devueltos llegan al diseño como `{PARAM.X}`. El protocolo AJAX agrega `x03` = ID y la respuesta incluye `layout`, `params` y `templateUrl`.
+
+El plugin no crea ni exige tablas: cualquier función con este contrato sirve. Una implementación típica guarda las plantillas en una tabla, verifica que el reporte esté publicado y que el usuario tenga acceso (por roles), y valida cada parámetro (obligatorio, número, fecha, valor de lista). [novaReport Designer](../README.md#novareport-designer) trae una implementación completa de este tipo.
+
+```javascript
+// Initialization JavaScript Code: armar ID y parámetros; devolver false cancela
+function (o) { o.report = 21; o.params = { CUENTA: $v('P5_CUENTA') }; return o; }
+```
 
 ## 4. Documentos: `DOCS` y `DOC_KEY`
 
@@ -190,7 +227,7 @@ El archivo `novareport.js` define el objeto global `window.novaReport`.
 
 | Miembro | Tipo | Descripción |
 |---|---|---|
-| `version` | `string` | Versión del motor, p. ej. `"1.6.1"`. |
+| `version` | `string` | Versión del motor, p. ej. `"1.8.0"`. |
 | `run(opciones)` | `Promise<Resultado>` | Pide los datos al servidor (o usa `opciones.data`), genera y entrega el archivo con UI (espera, avance, mensajes). |
 | `build(opciones, datos)` | `Promise<Resultado>` | Solo genera: sin AJAX, sin UI, sin descargar. Para pruebas o integraciones propias. |
 | `da(config)` | `void` | Punto de entrada que APEX llama desde la Acción Dinámica. No lo invoque directamente. |
@@ -213,6 +250,7 @@ novaReport.run({
   message: 'Consultando datos…',
   loader: true,                     // false: no abre la pestaña de espera del PDF
   hooks: { pdfCell: function (h, fila, col, seccion, ctx) {} },
+  save: { process: 'NR_GUARDAR', mode: 'only' }, // subir el archivo a un proceso On Demand
   transform: function (datos) { return datos; },
   data: null                        // datos ya obtenidos: se omite el AJAX
 }).then(function (r) { console.log(r.name); });
@@ -231,6 +269,7 @@ novaReport.run({
 | `message` | string | `Consultando datos…` | Texto de la pantalla de espera. |
 | `loader` | boolean | `true` | Pantalla de espera en pestaña nueva (solo PDF de un documento con `open`). |
 | `hooks` | object | `{}` | Hoy existe `pdfCell` (ver abajo). |
+| `save` | object | — | Guardar en el servidor: `{ process, mode }`. Tiene prioridad sobre `save` del diseño. Ver [DISENO.md](DISENO.md#guardar-en-el-servidor). |
 | `transform` | function | — | Recibe los datos crudos del servidor ([§10](#10-protocolo-ajax)) y puede devolver otros. |
 | `data` | object | — | Datos en el formato del [§10](#10-protocolo-ajax). Si se pasa, no se llama al servidor. |
 
@@ -243,6 +282,7 @@ novaReport.run({
 | `name` | Nombre del archivo entregado |
 | `count` | Documentos generados |
 | `files` | Archivos dentro del ZIP (solo `zip`) |
+| `saved` | Respuesta del proceso de guardado (solo con `save`) |
 
 Si falla, la promesa se rechaza, se muestra `apex.message.alert` y se dispara `novareport-error`.
 
@@ -323,6 +363,7 @@ Se disparan en `document` con `apex.event.trigger`. Puede escucharlos con una Ac
 |---|---|---|
 | `novareport-start` | `{ format, output }` | Al iniciar |
 | `novareport-progress` | `{ done, total }` | Cada bloque de un lote (`batch.chunkSize`) |
+| `novareport-saved` | `{ name, kind, response }` | Al guardar en el servidor (`save`) |
 | `novareport-end` | `{ name, count, files }` | Al entregar el archivo |
 | `novareport-error` | `{ message }` | Si falla |
 

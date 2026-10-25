@@ -9,7 +9,8 @@
         { "col": "LOC", "label": "Ubicación" },
         { "col": "EMPLEADOS", "label": "Empleados", "fmt": "int" },
         { "col": "SALARIOS", "label": "Salarios", "fmt": "money" } ] },
-    { "type": "tabla", "source": "EMP", "title": "Detalle", "totals": ["SAL", "COMM"],
+    { "type": "tabla", "source": "EMP", "title": "Detalle", "totalsLabel": "Totales ({COUNT} empleados)",
+      "totals": [{ "col": "HIREDATE", "fn": "max" }, "SAL", { "col": "COMM", "fn": "avg" }],
       "columns": [
         { "col": "EMPNO", "label": "N.°", "align": "center" },
         { "col": "ENAME", "label": "Nombre" },

@@ -4,6 +4,13 @@ global.document = { getElementById() { return null; }, addEventListener() {} };
 window.jspdf = require('jspdf'); require('jspdf-autotable');
 window.ExcelJS = require('exceljs'); window.JSZip = require('jszip'); window.docx = require('docx');
 window.PizZip = require('pizzip'); window.docxtemplater = require('docxtemplater');
+window.qrcode = require('qrcode-generator');
+/* Chart.js se publica como UMD dentro de un paquete "type": "module": se evalúa como script */
+{ const m = { exports: {} }; new Function('module', 'exports', require('fs').readFileSync(require.resolve('chart.js').replace(/[^\\/]+$/, '') + 'chart.umd.js', 'utf8'))(m, m.exports); window.Chart = m.exports; }
+/* Gráficos y marca de agua en Word dibujan en un <canvas>: en Node se usa el paquete "canvas" (opcional) */
+let CANVAS = false;
+try { const { createCanvas } = require('canvas'); document.createElement = t => t === 'canvas' ? createCanvas(1, 1) : null; CANVAS = true; }
+catch (e) { console.warn('Paquete "canvas" no disponible: se omiten los ejemplos con gráficos.'); }
 const fs = require('fs'), path = require('path');
 const EX = path.join(__dirname, '..', 'examples'), OUT = path.join(__dirname, 'out');
 const logo = fs.readFileSync(path.join(EX, '03-constancia-posicion-fija', 'logo.png'));
@@ -66,18 +73,36 @@ const data = {
     DOCS: { cols: [U('DOC_KEY'), N('DNAME'), N('LOC'), U('EMPLEADOS'), U('SALARIOS')],
       rows: [10, 20, 30].map(k => { const e = EMP.filter(x => x[6] == k); return [k, DEPT[k][0], DEPT[k][1], e.length, e.reduce((s, x) => s + x[4], 0)]; }) },
     EQUIPO: { cols: [U('DOC_KEY'), N('ENAME'), N('JOB'), { name: 'HIREDATE', type: 'DATE' }, U('SAL')],
-      rows: EMP.slice().sort((a, b) => a[6] - b[6] || b[4] - a[4]).map(e => [e[6], e[1], e[2], e[3], e[4]]) } }
+      rows: EMP.slice().sort((a, b) => a[6] - b[6] || b[4] - a[4]).map(e => [e[6], e[1], e[2], e[3], e[4]]) } },
+  '07-graficos-codigos': {
+    DEPTOS: { cols: [N('DNAME'), U('EMPLEADOS'), U('SALARIOS'), U('COMISIONES')],
+      rows: [10, 20, 30].sort((a, b) => DEPT[a][0] < DEPT[b][0] ? -1 : 1).map(k => {
+        const e = EMP.filter(x => x[6] == k);
+        return [DEPT[k][0], e.length, e.reduce((s, x) => s + x[4], 0), e.reduce((s, x) => s + (x[5] || 0), 0)]; }) },
+    EMP: { cols: [N('DNAME'), U('EMPNO'), N('ENAME'), N('JOB'), U('SAL'), U('COMM')],
+      rows: EMP.slice().sort((a, b) => (DEPT[a[6]][0] < DEPT[b[6]][0] ? -1 : DEPT[a[6]][0] > DEPT[b[6]][0] ? 1 : b[4] - a[4]))
+        .map(e => [DEPT[e[6]][0], e[0], e[1], e[2], e[4], e[5]]) } }
 };
+/* 08: los mismos datos que fuentes.sql (solo DUAL) */
+data['08-factura-columnas'] = {
+  DOCS: { cols: [U('DOC_KEY'), N('NUMERO'), { name: 'FECHA', type: 'DATE' }, N('CLIENTE'), N('CEDULA'), N('DIRECCION'), U('SUBTOTAL'), U('ITBMS'), U('TOTAL')],
+    rows: [[1, 'FAC-000123', '24/10/2026', 'Ana Pérez', '8-765-4321', 'Calle 50, Panamá', 1284, 89.88, 1373.88]] },
+  ITEMS: { cols: [U('DOC_KEY'), N('DESCRIPCION'), U('CANTIDAD'), U('PRECIO'), U('IMPORTE')],
+    rows: [[1, 'Consultoría Oracle APEX', 8, 120, 960], [1, 'Licencia novaReport (soporte anual)', 1, 324, 324]] },
+  EMPRESA: { cols: [N('NOMBRE'), N('RUC'), N('DIRECCION')], rows: [['NovaCode, S.A.', '155771259-2-2025', 'Panamá Oeste, Arraiján']] } };
 const runs = [['01-listado-empleados', 'pdf', 'file'], ['01-listado-empleados', 'xlsx', 'file'], ['01-listado-empleados', 'docx', 'file'],
   ['02-cartas-zip', 'pdf', 'zip'], ['02-cartas-zip', 'pdf', 'merge'], ['03-constancia-posicion-fija', 'pdf', 'file'],
   ['04-imagen-blob', 'pdf', 'zip'], ['04-imagen-blob', 'docx', 'zip'],
   ['05-excel-multihoja', 'xlsx', 'file'], ['05-excel-multihoja', 'pdf', 'file'], ['05-excel-multihoja', 'docx', 'file'],
   ['05-excel-multihoja', 'all', 'zip'],
-  ['06-plantilla-word', 'docx-template', 'zip', '06-plantilla-word/plantilla.docx']];
+  ['06-plantilla-word', 'docx-template', 'zip', '06-plantilla-word/plantilla.docx'],
+  ['07-graficos-codigos', 'pdf', 'file'], ['07-graficos-codigos', 'xlsx', 'file'], ['07-graficos-codigos', 'docx', 'file'],
+  ['08-factura-columnas', 'pdf', 'file'], ['08-factura-columnas', 'xlsx', 'file'], ['08-factura-columnas', 'docx', 'file']];
 
 fs.mkdirSync(OUT, { recursive: true });
 (async () => {
   for (const [ex, format, output, templateUrl] of runs) {
+    if (ex === '07-graficos-codigos' && !CANVAS) { console.log('OMITIDO', ex, format); continue; }
     const layout = JSON.parse(fs.readFileSync(path.join(EX, ex, 'diseno.json'), 'utf8'));
     (layout.sections || []).forEach(s => { if (s.type === 'imagen' && s.url) { s.url = '#APP_FILES#' + logo.toString('base64'); } });
     const t = Date.now();
@@ -85,5 +110,91 @@ fs.mkdirSync(OUT, { recursive: true });
     const name = ex + '__' + format + '_' + output + '__' + r.name;
     fs.writeFileSync(path.join(OUT, name), Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data));
     console.log('OK  ', name.padEnd(70), (Date.now() - t) + ' ms');
+  }
+  /* Agregados en la primera columna: el texto de totales va en su propia fila */
+  {
+    const layout = JSON.parse(fs.readFileSync(path.join(EX, '01-listado-empleados', 'diseno.json'), 'utf8'));
+    const t = layout.sections.filter(s => s.type === 'tabla' && s.source === 'EMP')[0];
+    t.totals = [{ col: 'EMPNO', fn: 'count' }, { col: 'HIREDATE', fn: 'min' }, { col: 'SAL', fn: 'avg' }, 'COMM'];
+    t.breakBy = 'DNAME';
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const r = await window.novaReport.build({ layout, format, output: 'file', zipType: 'nodebuffer' }, data['01-listado-empleados']);
+      const name = 'agregados-primera-col__' + format + '__' + r.name;
+      fs.writeFileSync(path.join(OUT, name), Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data));
+      console.log('OK  ', name);
+    }
+  }
+  /* when en secciones y columnas + monto en letras */
+  {
+    const layout = { fileName: 'when-letras', sections: [
+      { type: 'header', title: 'Prueba when / letras' },
+      { type: 'tabla', source: 'EMP', columns: ['ENAME', { col: 'SAL', label: 'En letras', fmt: 'letras:BALBOA/BALBOAS' },
+        { col: 'COMM', when: "PARAM.COMISION == 'S'" }] },
+      { type: 'tabla', source: 'DEPTOS', when: "PARAM.DEPTOS == 'S'" },
+      { type: 'ficha', fields: [{ label: 'Total', value: '{DEPTOS.SALARIOS}', fmt: 'letras:BALBOAS' }] }] };
+    const ExcelJS = window.ExcelJS, texts = async buf => {
+      const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf); const out = [];
+      wb.eachSheet(ws => ws.eachRow(r => r.eachCell(c => out.push(String(c.value)))));
+      return out;
+    };
+    for (const [prm, ver] of [[{ COMISION: 'N', DEPTOS: 'N' }, false], [{ COMISION: 'S', DEPTOS: 'S' }, true]]) {
+      for (const format of ['pdf', 'xlsx', 'docx']) {
+        const r = await window.novaReport.build({ layout, format, output: 'file', params: prm, zipType: 'nodebuffer' }, data['01-listado-empleados']);
+        const name = 'when-letras__' + (ver ? 'si' : 'no') + '__' + format + '__' + r.name;
+        const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
+        fs.writeFileSync(path.join(OUT, name), buf);
+        if (format === 'xlsx') {
+          const t = await texts(buf), has = s => t.indexOf(s) >= 0;
+          if (!has('CINCO MIL BALBOAS CON 00/100')) { throw new Error('letras: falta CINCO MIL BALBOAS'); }
+          if (!has('OCHOCIENTOS BALBOAS CON 00/100')) { throw new Error('letras: falta OCHOCIENTOS BALBOAS'); }
+          if (has('Comm') !== ver) { throw new Error('when columna: Comm ' + (ver ? 'no aparece' : 'aparece')); }
+          if (has('NEW YORK') !== ver) { throw new Error('when sección: DEPTOS ' + (ver ? 'no aparece' : 'aparece')); }
+        }
+        console.log('OK  ', name);
+      }
+    }
+  }
+  /* Columnas: casillas lado a lado (factura) + fila que no cabe y pasa a la página siguiente */
+  {
+    const lay = (rel) => ({ fileName: 'columnas-' + rel, sections: [
+      { type: 'header', title: 'Factura de prueba', right: 'N.º 000123' },
+      { type: 'columnas', widths: [60, 40], cols: [
+        [ { type: 'texto', text: '**Emisor**\nNovaCode, S.A.\nRUC 155771259-2-2025' },
+          { type: 'ficha', source: 'DEPTOS', columns: 1, fields: [{ label: 'Depto', value: '{DNAME}' }, { label: 'Sede', value: '{LOC}' }] } ],
+        [ { type: 'codigo', kind: 'code128', value: 'FAC-000123', height: 10, align: 'right' },
+          { type: 'alerta', source: 'DEPTOS', text: 'Total: {SALARIOS|letras:BALBOAS}', color: '#FFF4CE' } ] ] },
+      { type: 'tabla', source: 'EMP', columns: ['ENAME', 'JOB', 'SAL'], totals: ['SAL'] },
+      { type: 'columnas', widths: [50, 50], when: "PARAM.FIRMAS == 'S'", cols: [
+        [ { type: 'espacio', height: 12 }, { type: 'linea', width: 60, align: 'center' }, { type: 'texto', text: 'Entregado por', align: 'center' } ],
+        [ { type: 'espacio', height: 12 }, { type: 'linea', width: 60, align: 'center' }, { type: 'texto', text: 'Recibido por', align: 'center' },
+          { type: 'header', title: 'NO DEBE SALIR' } ] ] }] });
+    const ExcelJS = window.ExcelJS;
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const r = await window.novaReport.build({ layout: lay(format), format, output: 'file', params: { FIRMAS: 'S' }, zipType: 'nodebuffer' }, data['01-listado-empleados']);
+      const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
+      fs.writeFileSync(path.join(OUT, 'columnas__' + format + '__' + r.name), buf);
+      if (format === 'xlsx') {
+        const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0];
+        let emisor = null, total = null, recibido = null, entregado = null, nodebe = false;
+        ws.eachRow(row => row.eachCell(c => {
+          const v = String(c.value && c.value.richText ? c.value.richText.map(x => x.text).join('') : c.value);
+          if (/Emisor/.test(v)) { emisor = [c.row, c.col]; }
+          if (/^Total: /.test(v)) { total = [c.row, c.col]; }
+          if (v === 'Entregado por') { entregado = [c.row, c.col]; }
+          if (v === 'Recibido por') { recibido = [c.row, c.col]; }
+          if (/NO DEBE SALIR/.test(v)) { nodebe = true; }
+        }));
+        if (!emisor || !total || total[1] <= emisor[1]) { throw new Error('xlsx columnas: casilla derecha no está a la derecha ' + JSON.stringify([emisor, total])); }
+        if (!entregado || !recibido || entregado[0] !== recibido[0] || recibido[1] <= entregado[1]) { throw new Error('xlsx firmas no quedaron en la misma fila ' + JSON.stringify([entregado, recibido])); }
+        if (nodebe) { throw new Error('header dentro de una casilla no debe dibujarse'); }
+      }
+      if (format === 'docx') {
+        const x = (await window.JSZip.loadAsync(buf)).file('word/document.xml');
+        const xml = await x.async('string');
+        if (/NO DEBE SALIR/.test(xml)) { throw new Error('docx: header dentro de casilla'); }
+        if (!/Entregado por[\s\S]*<\/w:tc>[\s\S]*Recibido por/.test(xml)) { throw new Error('docx: firmas no están en celdas distintas'); }
+      }
+      console.log('OK  ', 'columnas__' + format + '__' + r.name);
+    }
   }
 })().catch(e => { console.error('FALLÓ', e); process.exit(1); });

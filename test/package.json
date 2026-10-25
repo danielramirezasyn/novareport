@@ -8,13 +8,15 @@
     "plantilla": "node crear-plantilla.js"
   },
   "devDependencies": {
+    "chart.js": "4.4.9",
     "docx": "9.5.1",
     "docxtemplater": "3.60.0",
     "exceljs": "4.4.0",
     "jspdf": "4.2.1",
     "jspdf-autotable": "3.8.4",
     "jszip": "3.10.1",
-    "pizzip": "3.1.8"
+    "pizzip": "3.1.8",
+    "qrcode-generator": "1.4.4"
   },
   "engines": {
     "node": ">=18"
@@ -24,5 +26,8 @@
       "jspdf": "$jspdf"
     }
   },
-  "//": "jsPDF 4.2.1 + AutoTable 3.8.4 son las versiones que carga el plugin; AutoTable declara jspdf ^2.5.1 como peer, por eso el override."
+  "//": "jsPDF 4.2.1 + AutoTable 3.8.4 son las versiones que carga el plugin; AutoTable declara jspdf ^2.5.1 como peer, por eso el override. \"canvas\" es opcional: solo para probar gráficos y la marca de agua de Word en Node.",
+  "optionalDependencies": {
+    "canvas": "3.2.3"
+  }
 }

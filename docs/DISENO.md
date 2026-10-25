@@ -6,7 +6,8 @@ El diseño describe **qué** se dibuja; las [fuentes SQL](API.md#3-fuentes-sql) 
 - [Plantillas de texto `{...}`](#plantillas-de-texto-)
 - [Formatos de valor](#formatos-de-valor)
 - [Condiciones](#condiciones)
-- [Secciones](#secciones): [header](#header) · [ficha](#ficha) · [tabla](#tabla) · [alerta](#alerta) · [texto](#texto) · [imagen](#imagen) · [linea](#linea) · [espacio y salto](#espacio-y-salto)
+- [Marca de agua](#marca-de-agua)
+- [Secciones](#secciones): [header](#header) · [ficha](#ficha) · [tabla](#tabla) · [alerta](#alerta) · [texto](#texto) · [imagen](#imagen) · [grafico](#grafico) · [codigo](#codigo) · [linea](#linea) · [espacio y salto](#espacio-y-salto)
 - [Qué soporta cada formato](#qué-soporta-cada-formato)
 - [Excel: hojas](#excel-hojas)
 - [Lotes y resumen](#lotes-y-resumen)
@@ -32,6 +33,7 @@ Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) es
   "title": "Propiedad Título del PDF / Word",
   "fileName": "estado_{DOC.CLIENTE}",
   "emptyMessage": "No hay datos para este filtro.",
+  "watermark": { "text": "BORRADOR", "when": "ESTADO != 'APROBADO'" },
   "sections": [ ],
   "footer": { "left": "Confidencial", "right": "Página {PAGE} de {PAGES}", "size": 7 },
   "defs": { },
@@ -53,9 +55,11 @@ Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) es
 | `page.theme.totals` | `#E6ECF2` | Fila de totales. |
 | `page.theme.muted` | `#787878` | Texto del pie de página. |
 | `page.theme.fontSize` | `7` | Tamaño base de tablas (PDF y Word). |
+| `page.theme.group` | `#DCE6F0` | Fila de encabezado de grupo en tablas con `breakBy`. |
 | `title` | — | Propiedad *Título* del PDF y del Word. Acepta plantillas. |
 | `fileName` | `reporte` | Nombre de cada documento, sin extensión. Acepta plantillas (`{DOC.X}`, `{TODAY}`). |
 | `emptyMessage` | `No hay datos para generar el reporte.` | Mensaje si `DOCS` no trae filas. |
+| `watermark` | — | Texto en diagonal sobre cada página. Ver [Marca de agua](#marca-de-agua). |
 | `sections` | — | Lista de [secciones](#secciones), en orden. |
 | `footer.left` / `footer.right` | — | Pie de cada página. `{PAGE}` y `{PAGES}` solo funcionan aquí. |
 | `footer.size` | `7` | Tamaño de letra del pie (PDF y Word). |
@@ -96,9 +100,12 @@ Se usan en `{COL|formato}` o en la propiedad `"fmt"` de columnas y campos.
 | `date` | `09/12/1982` | `09/12/1982` | fecha real `dd/mm/yyyy` |
 | `upper` / `lower` | `Ana` | `ANA` / `ana` | texto |
 | `yn` | `Y`, `S` / `N` | `Sí` / `No` | texto |
+| `letras` | `1234.5` | `MIL DOSCIENTOS TREINTA Y CUATRO CON 50/100` | texto |
+| `letras:BALBOA/BALBOAS` | `1` / `21.07` | `UN BALBOA CON 00/100` / `VEINTIÚN BALBOAS CON 07/100` | texto |
 
 - Los números usan coma para miles y punto para decimales.
 - `pct` no multiplica por 100: espera el porcentaje ya calculado.
+- `letras` redondea a 2 decimales. Con moneda, `singular/plural` (`letras:DÓLAR/DÓLARES`) o un solo nombre (`letras:BALBOAS`). Agrega `DE` tras millones (`UN MILLÓN DE BALBOAS`). Negativos: `MENOS …`. En Excel queda como texto.
 - Una columna `NUMBER` sin `fmt` usa `money` si alguna fila tiene decimales; si todas son enteras, se muestra tal cual.
 - Cualquier otro valor de `fmt` deja el valor sin cambios (en Excel, número con formato *General*).
 
@@ -119,6 +126,28 @@ Las usan `filter`, `when`, `rowStyle` y `cellStyle`.
 
 Literales: `'texto'`, `"texto"`, números y `null`. `COL == ''` y `COL == null` son verdaderos si la columna está vacía. No hay paréntesis.
 
+## Marca de agua
+
+Texto semitransparente y rotado, centrado en cada página del documento (PDF y Word).
+
+```json
+"watermark": { "text": "BORRADOR", "when": "ESTADO != 'APROBADO'", "color": "#C00000", "opacity": 0.12, "angle": 45 }
+"watermark": "COPIA"
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `text` | — | Texto. Acepta plantillas (`{DOC.ESTADO}`). Vacío: no hay marca. |
+| `when` | — | [Condición](#condiciones) evaluada **por documento** (contra la fila de `DOCS` y los parámetros). En un lote o en salida unida, cada documento decide. Ej.: `"!PARAM.FINAL"`. |
+| `color` | `#C00000` | Color del texto. |
+| `opacity` | `0.12` | De `0` (invisible) a `1`. |
+| `angle` | `45` | Grados, en sentido contrario a las agujas del reloj. `0` = horizontal. |
+| `size` | automático | Tamaño en pt. Sin `size`, el texto ocupa ~60 % de la diagonal de la página (80 % del ancho si `angle` es `0`). |
+
+- **PDF:** se dibuja encima del contenido con la opacidad indicada.
+- **Word:** imagen flotante detrás del texto, en el encabezado de la sección (se genera con `<canvas>` en el navegador).
+- **Excel:** no aplica.
+
 ## Secciones
 
 Propiedades comunes a todas:
@@ -128,6 +157,7 @@ Propiedades comunes a todas:
 | `type` | Tipo de sección. |
 | `id` | Nombre para usarla en `xlsx.sheets`. |
 | `formats` | Limita los formatos donde aparece: `["pdf", "docx"]`. |
+| `when` | La sección solo aparece si se cumple la [condición](#condiciones), evaluada **por documento** (fila de `DOCS`, parámetros y `{FUENTE.COL}`). Ej.: `"PARAM.DETALLE == 'S'"`. En `alerta`, `when` conserva su significado (por fila). |
 | `source` | Fuente de datos (en mayúsculas o minúsculas). |
 
 ### `header`
@@ -193,8 +223,8 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
 | `title` | — | Fila de título sobre el encabezado. |
 | `filter` | — | Solo las filas que cumplen la [condición](#condiciones). |
 | `columns` | todas | Columnas. Sin `columns` se usan todas las de la consulta (excepto `DOC_KEY`), con el alias como etiqueta (`FECHA_PAGO` → `Fecha pago`). Un elemento puede ser solo el nombre: `"ENAME"`. |
-| `totals` | — | Columnas a sumar. En Excel la fila usa `=SUM()`. |
-| `totalsLabel` | `Totales` | Texto de la fila de totales (en la primera columna que no se suma). |
+| `totals` | — | Columnas con total: `"COL"` (suma) u `{ "col": "COL", "fn": "sum\|avg\|min\|max\|count" }`. `min`/`max` admiten números, fechas y texto; `count` cuenta valores no vacíos. Con funciones distintas a la suma cada valor lleva un prefijo (Prom., Mín., Máx., Cant.). En Excel: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNTA` (con quiebres, `SUBTOTAL`). |
+| `totalsLabel` | `Totales` | Texto de la fila de totales. Ocupa una celda combinada hasta la primera columna con total; si esa es la primera, va en su propia fila. Admite `{COUNT}`. |
 | `rowStyle` | — | Reglas por fila: `when`, `fill`, `color`, `bold`. Se aplica la primera que se cumple. |
 | `groups` | — | Encabezado agrupado. Ver abajo. |
 | `emptyText` | — | Si no hay filas, muestra la tabla con este texto. |
@@ -203,6 +233,10 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
 | `zebra` | `true` | Filas alternas (Excel y Word; el PDF siempre las alterna). |
 | `size` | `theme.fontSize` | Tamaño de letra (PDF). |
 | `gap` | `3` | Espacio después de la tabla en mm (PDF). |
+| `breakBy` | — | Quiebre de control: agrupa filas **consecutivas** con el mismo valor de esta columna. Ver abajo. |
+| `breakTitle` | `{COL}` | Fila de encabezado de cada grupo. Acepta `{COL}` (primera fila del grupo) y `{COUNT}`. `false`: sin encabezado. |
+| `breakLabel` | `Subtotal {COL}` | Texto de la fila de subtotal. Acepta `{COL}` y `{COUNT}`. |
+| `breakTotals` | = `totals` | Columnas a subtotalizar (mismo formato que `totals`). `false`: sin fila de subtotal. |
 
 **Columnas:**
 
@@ -218,6 +252,7 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
 | `map` | Traducción de valores: `{ "Y": "Sí" }`. |
 | `value` | Columna calculada con plantilla: `"{NOMBRE} ({CODIGO})"`. Se exporta como texto. |
 | `cellStyle` | Reglas para la celda: `when`, `fill`, `color`, `bold`. Tiene prioridad sobre `rowStyle`. |
+| `when` | La columna solo aparece si se cumple la [condición](#condiciones), evaluada por documento (no por fila). Si oculta columnas, revise `groups`. |
 
 **Encabezado agrupado:**
 
@@ -228,6 +263,19 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
 Los grupos se aplican en orden, de izquierda a derecha. Un grupo sin `label` deja esas columnas con su etiqueta ocupando las dos filas del encabezado (en Word, la celda del grupo queda vacía). Las columnas que sobran quedan sin grupo.
 
 **Excel:** números y fechas como valores reales, encabezado inmovilizado y autofiltro cuando la hoja tiene una sola tabla.
+
+**Quiebres y subtotales:**
+
+```json
+{ "type": "tabla", "source": "EMP",
+  "columns": [ "ENAME", "JOB", { "col": "SAL", "fmt": "money" }, { "col": "COMM", "fmt": "money" } ],
+  "breakBy": "DNAME", "breakTitle": "Departamento: {DNAME} ({COUNT})", "breakLabel": "Subtotal {DNAME}",
+  "totals": ["SAL", "COMM"], "totalsLabel": "Total general" }
+```
+
+Como en Oracle Reports, el grupo cambia cuando cambia el valor: **ordene la consulta por la columna de quiebre** (`ORDER BY dname, …`). La columna de quiebre no necesita estar en `columns`. Cada grupo lleva una fila de encabezado (`breakTitle`), sus filas y una fila de subtotal (`breakLabel`) con la suma de `breakTotals` (o de `totals`). El total general sigue saliendo en `totals`.
+
+En Excel los subtotales son `=SUBTOTAL(9; …)` y el total general también, para no sumar dos veces; con `breakBy` la hoja no lleva autofiltro. En PDF las filas alternas se cuentan solo sobre filas de datos.
 
 ### `alerta`
 
@@ -304,6 +352,62 @@ PNG o JPG desde una URL o desde una columna BLOB.
 
 Si la columna viene vacía, la imagen se omite. En Excel la imagen se ancla en la columna A de la fila actual.
 
+### `grafico`
+
+Gráfico de barras, líneas, área, circular o anillo a partir de una fuente. Se dibuja con [Chart.js](https://www.chartjs.org) en un `<canvas>` y se inserta como imagen PNG (alta resolución) en PDF, Excel y Word.
+
+```json
+{ "type": "grafico", "chart": "bar", "source": "VENTAS", "category": "MES",
+  "series": [ { "col": "TOTAL", "label": "Ventas", "color": "#1F4E79" }, "META" ],
+  "title": "Ventas por mes", "values": true, "fmt": "int", "width": 120, "height": 70, "align": "center" }
+{ "type": "grafico", "chart": "doughnut", "source": "DEPTOS", "category": "DNAME", "series": ["EMPLEADOS"], "values": "pct" }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `chart` | `bar` | `bar`, `hbar` (barras horizontales), `line`, `area`, `pie`, `doughnut`. |
+| `source` | — | Fuente: una fila por categoría (por documento si la fuente trae `DOC_KEY`). |
+| `category` | primera columna no numérica | Etiquetas del eje o de las porciones. |
+| `series` | todas las numéricas | Columnas a graficar: `"TOTAL"` o `{ "col", "label", "color" }`. `pie` / `doughnut` usan solo la primera. |
+| `title` | — | Título (acepta plantillas). |
+| `values` | — | `true`: escribe el valor sobre cada barra / punto / porción. `"pct"`: porcentaje del total. |
+| `fmt` | `int` o `num:2` | [Formato](#formatos-de-valor) de valores y del eje. |
+| `legend` | automático | Se muestra si hay más de una serie o si es `pie` / `doughnut`. `true` / `false` para forzar. |
+| `legendPosition` | `bottom` (`right` en circulares) | `top`, `bottom`, `left`, `right`. |
+| `stacked` | `false` | Barras / áreas apiladas. |
+| `smooth` | `false` | Líneas curvas. |
+| `beginAtZero` | `true` | El eje de valores empieza en 0. |
+| `colors` | tema + paleta | Colores por serie (o por porción en circulares). |
+| `size` | `8` | Tamaño de letra en pt. |
+| `width` / `height` | `120` / `70` | Tamaño en mm. |
+| `align`, `gap`, `x`, `y` | | Igual que [`imagen`](#imagen). |
+
+Sin filas, el gráfico se omite. Requiere navegador (usa `<canvas>`); en Node se puede probar con el paquete `canvas` (ver `test/run.js`).
+
+### `codigo`
+
+Código QR o código de barras **Code 128** con el valor de una plantilla.
+
+```json
+{ "type": "codigo", "kind": "qr", "value": "https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE?CUFE={DOC.CUFE}", "size": 30, "align": "right" }
+{ "type": "codigo", "kind": "code128", "value": "{DOC.NRO_DOC}", "width": 60, "height": 12 }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `kind` | `qr` | `qr` o `code128`. |
+| `value` | — | Texto a codificar (plantilla). Vacío: no se dibuja. QR admite UTF-8; Code 128 solo ASCII imprimible (otros caracteres se cambian por `?`). |
+| `source` | — | Toma `{COL}` de la primera fila de esta fuente; sin `source`, del documento. |
+| `size` | `30` | QR: lado en mm. |
+| `ecc` | `M` | QR: corrección de errores `L`, `M`, `Q`, `H`. |
+| `width` / `height` | automático / `12` | Code 128: ancho y alto de las barras en mm. |
+| `showText` | `true` | Code 128: texto legible debajo de las barras. |
+| `textSize` | `8` | Tamaño de ese texto. |
+| `color` | `#000000` | Color de los módulos. |
+| `align`, `gap`, `x`, `y` | | Igual que [`imagen`](#imagen). |
+
+En PDF el código es vectorial (nítido a cualquier zoom). En Word y Excel va como PNG con una zona blanca alrededor. Code 128 elige solo entre los juegos B y C (los números en pares ocupan la mitad).
+
 ### `linea`
 
 ```json
@@ -319,6 +423,29 @@ Si la columna viene vacía, la imagen se omite. En Excel la imagen se ancla en l
 | `color` | `#000000` | |
 | `gapBefore` / `gap` | `0` / `2` | Espacio antes / después. |
 | `x1`, `y1`, `x2`, `y2` | — | Línea en posición fija, horizontal o vertical (solo PDF). |
+
+### `columnas`
+
+Pone 2 o 3 casillas **lado a lado**; cada casilla lleva sus propias secciones. Sirve para facturas (emisor y cliente, logo y datos), recibos con QR junto al monto y firmas en una misma línea.
+
+```json
+{ "type": "columnas", "widths": [60, 40], "cols": [
+  [ { "type": "texto", "text": "**Emisor**\nNovaCode, S.A." }, { "type": "ficha", "columns": 1, "fields": [ ... ] } ],
+  [ { "type": "codigo", "kind": "qr", "value": "{DOC.NUMERO}", "align": "right" } ] ] }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `cols` | — | Arreglo de casillas (1 a 3); cada una es un arreglo de secciones. |
+| `widths` | iguales | Ancho relativo de cada casilla, p. ej. `[60, 40]`. |
+| `colGap` | `4` | Espacio entre casillas en mm. |
+| `gap` | `1` | Espacio después de la fila en mm (PDF). |
+
+- Dentro de una casilla solo van `ficha`, `texto`, `imagen`, `codigo`, `alerta`, `linea`, `tabla`, `grafico` y `espacio`. Otras secciones (`header`, `salto`, otra `columnas`) se ignoran, igual que `x`/`y`.
+- Las imágenes, gráficos y códigos más anchos que la casilla se reducen a su ancho.
+- La fila **no se parte entre páginas**: si no cabe, pasa completa a la siguiente. Si ni en una página completa cabe, las casillas se apilan. Las tablas largas van a ancho completo, fuera de las columnas.
+- Cada sección dentro de una casilla admite `when` y `formats`; la fila completa también.
+- **PDF**: cada casilla en su franja. **Word**: tabla sin bordes, una celda por casilla. **Excel**: cada casilla ocupa un bloque de columnas de la hoja, una al lado de la otra (sin filtro ni panel inmovilizado dentro de las casillas).
 
 ### `espacio` y `salto`
 
@@ -340,16 +467,85 @@ Si la columna viene vacía, la imagen se omite. En Excel la imagen se ancla en l
 | `tabla.repeatHeader` | ✓ | — | siempre |
 | `alerta` | ✓ | ✓ | ✓ |
 | `texto` enriquecido | ✓ | ✓ | ✓ |
-| `texto` / `imagen` con `x`, `y` | ✓ | — | se ignora la posición |
+| `texto` / `imagen` / `grafico` / `codigo` con `x`, `y` | ✓ | — | se ignora la posición |
 | `imagen` | ✓ | ✓ | ✓ |
+| `grafico` | ✓ | ✓ imagen | ✓ |
+| `codigo` | ✓ vectorial | ✓ imagen | ✓ |
+| `tabla.breakBy` | ✓ | ✓ `SUBTOTAL()` | ✓ |
+| `watermark` | ✓ | — | ✓ detrás del texto |
 | `linea` | ✓ | — | ✓ horizontal |
 | `linea` con `x1…y2` | ✓ | — | — |
 | `espacio` | ✓ | fila vacía | ✓ |
 | `salto` | ✓ | fila vacía | ✓ |
 | `footer` | ✓ | izquierda + *Página X de Y* | ✓ |
 | `hooks.pdfCell` | ✓ | — | — |
+| `when` en secciones y columnas | ✓ | ✓ | ✓ |
+| `columnas` (casillas lado a lado) | ✓ | ✓ bloques de columnas | ✓ tabla sin bordes |
+| `fmt: letras` | ✓ | ✓ texto | ✓ |
+| `save` (guardar en el servidor) | ✓ | ✓ | ✓ |
 
 Use `"formats"` para ocultar una sección donde no aplica: `{ "type": "salto", "formats": ["pdf"] }`.
+
+## Guardar en el servidor
+
+Además de entregar el archivo al usuario (o en lugar de hacerlo), el plugin puede subirlo a un **proceso de aplicación** (*On Demand*) para archivarlo, enviarlo por correo o registrar la ejecución.
+
+```json
+"save": { "process": "NR_GUARDAR", "mode": "only" }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `save.process` | — | Nombre del proceso de aplicación *On Demand*. Vacío: no se guarda. |
+| `save.mode` | entregar | `only`: solo se guarda y se muestra un mensaje de éxito (el `msg` de la respuesta, si viene). Sin `mode`: se guarda y además se abre o descarga. |
+
+También se puede indicar en `novaReport.run({ save: {...} })` o en el objeto de la acción; esa opción tiene prioridad sobre el diseño. Si el guardado falla, no se entrega el archivo y se muestra el error.
+
+El proceso recibe:
+
+| Variable | Valor |
+|---|---|
+| `apex_application.g_f01` | Archivo en base64, en trozos de 30 000 caracteres. |
+| `apex_application.g_x01` | Nombre del archivo (`fileName` con extensión, o el ZIP). |
+| `apex_application.g_x02` | Tipo MIME. |
+| `apex_application.g_x03` | Reporte (`data-report`, origen *resolver*). |
+| `apex_application.g_x04` | Parámetros en JSON. |
+| `apex_application.g_x05` | `pdf`, `xlsx`, `docx` o `zip`. |
+
+Debe responder JSON. `{ "ok": false, "msg": "..." }` se trata como error; cualquier otra respuesta, como éxito.
+
+```sql
+declare
+  l_b64  clob;
+  l_blob blob;
+  l_id   number;
+begin
+  dbms_lob.createtemporary(l_b64, true);
+  for i in 1 .. apex_application.g_f01.count loop
+    dbms_lob.writeappend(l_b64, length(apex_application.g_f01(i)), apex_application.g_f01(i));
+  end loop;
+  l_blob := apex_web_service.clobbase642blob(l_b64);
+
+  insert into mis_documentos (nombre, mime, contenido, reporte, parametros, creado_por, creado_en)
+  values (apex_application.g_x01, apex_application.g_x02, l_blob, apex_application.g_x03,
+          apex_application.g_x04, :APP_USER, systimestamp)
+  returning id into l_id;
+
+  apex_json.open_object;
+  apex_json.write('ok', true);
+  apex_json.write('id', l_id);
+  apex_json.write('msg', 'Documento guardado con el número ' || l_id || '.');
+  apex_json.close_object;
+exception
+  when others then
+    apex_json.open_object;
+    apex_json.write('ok', false);
+    apex_json.write('msg', sqlerrm);
+    apex_json.close_object;
+end;
+```
+
+El evento `novareport-saved` recibe `{ name, kind, response }`.
 
 ## Excel: hojas
 

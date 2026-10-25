@@ -1,6 +1,6 @@
 # novaReport — PDF, Excel and Word for Oracle APEX
 
-[![Version](https://img.shields.io/badge/version-1.6.1-1F4E79)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.11.0-1F4E79)](CHANGELOG.md)
 [![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requirements)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -27,6 +27,7 @@ The detailed reference ([docs/API.md](docs/API.md), [docs/DISENO.md](docs/DISENO
 - [Testing without APEX](#testing-without-apex)
 - [Security](#security)
 - [Known issues and limitations](#known-issues-and-limitations)
+- [novaReport Designer](#novareport-designer)
 - [License and author](#license-and-author)
 
 ## Features
@@ -35,7 +36,10 @@ The detailed reference ([docs/API.md](docs/API.md), [docs/DISENO.md](docs/DISENO
 |---|---|
 | **One layout, three formats** | The same JSON produces PDF, Excel (`.xlsx` with colors, `=SUM()` totals, autofilter, multiple sheets) and Word (editable `.docx`). |
 | **Batches** | One file per document inside a **ZIP**, with an optional **summary** document; or every document **merged into a single file**. |
-| **Declarative layout** | Header band, key/value card, tables with totals, grouped headers and conditional styles, alerts, rich text (bold, italic, underline, strike-through, colors, 3 fonts), images (URL or **BLOB**), lines and **absolutely positioned** elements. |
+| **Declarative layout** | Header band, key/value card, tables with totals (sum, average, min, max, count), control breaks with subtotals, grouped headers and conditional styles, alerts, rich text (bold, italic, underline, strike-through, colors, 3 fonts), images (URL or **BLOB**), charts, **QR** and **Code 128**, watermark, lines and **absolutely positioned** elements. |
+| **Columns** | **Side-by-side** cells (logo and details, customer and totals, signatures) that look the same in PDF and Word, and become column blocks in Excel. |
+| **Logic in the layout** | Sections and columns shown **conditionally** (`when`), amounts **in words** (Spanish: `MIL DOSCIENTOS BALBOAS CON 50/100`) and value formats. |
+| **Save on the server** | Besides delivering it, uploads the generated file to a process in your application to **archive it, email it or log the run**. |
 | **Word templates** | Fills a `.docx` built in Word using `{FIELD}` tags and `{#TABLE}…{/TABLE}` loops. |
 | **One file per row** | `data-*` attributes on the link or button become bind variables (`:EMPNO`). |
 | **No schema objects** | Creates no tables or packages: it runs the queries you write. |
@@ -57,7 +61,7 @@ To upgrade, import the new version over the old one; existing actions keep their
 
 ## Your first report in 5 minutes
 
-Using the **EMP / DEPT** sample tables (*SQL Workshop → Utilities → Sample Datasets*):
+Using the **EMP / DEPT** sample tables (run [`examples/00-tablas-emp-dept.sql`](examples/00-tablas-emp-dept.sql) or use *SQL Workshop → Utilities → Sample Datasets*):
 
 **1. Button.** Create a button `EMPLOYEES_PDF` with *Action* = **Defined by Dynamic Action**.
 
@@ -173,7 +177,9 @@ select h.empno doc_key, h.change_date, h.position from history h
   "sections": [ ],
   "footer": { "left": "text", "right": "Page {PAGE} of {PAGES}" },
   "defs": { }, "xlsx": { "sheets": [ { "name": "Data", "sections": ["id1"] } ] },
-  "batch": { "zipName": "batch_{TODAY}", "mergeName": "all", "chunkSize": 5, "maxDocs": 3000, "summary": { "sections": [ ] } }
+  "batch": { "zipName": "batch_{TODAY}", "mergeName": "all", "chunkSize": 5, "maxDocs": 3000, "summary": { "sections": [ ] } },
+  "watermark": { "text": "DRAFT", "when": "!PARAM.FINAL" },
+  "save": { "process": "MY_SAVE_PROCESS", "mode": "only" }
 }
 ```
 
@@ -181,15 +187,19 @@ select h.empno doc_key, h.change_date, h.position from history h
 |---|---|---|
 | `header` | Colored title band | `title`, `subtitle`, `right`, `size` |
 | `ficha` | Label / value pairs | `source`, `columns`, `fields[{label, value, fmt, map, when}]` |
-| `tabla` | Table | `source`, `columns[{col, label, fmt, align, bold, color, width, map, value, cellStyle}]`, `totals`, `rowStyle`, `groups`, `filter`, `title`, `emptyText` |
+| `tabla` | Table | `source`, `columns[{col, label, fmt, align, bold, color, width, map, value, cellStyle, when}]`, `totals` (`sum`/`avg`/`min`/`max`/`count`), `breakBy`, `rowStyle`, `groups`, `filter`, `title`, `emptyText` |
 | `alerta` | Colored banner when a condition holds | `source`, `when`, `each`, `text`, `color` |
 | `texto` | Rich-text paragraphs | `text`, `align`, `size`, `lineHeight`, `font`, `color`, `x`/`y` (PDF) |
 | `imagen` | PNG/JPG from URL or BLOB | `url` or `field`, `width`, `height`, `align`, `x`/`y` (PDF) |
 | `linea` | Horizontal or positioned line | `width`, `align`, `thickness`, `color`, `x1…y2` (PDF) |
+| `grafico` | Bar, line, area, pie or doughnut chart | `source`, `chart`, `category`, `series`, `colors`, `values`, `width`, `height` |
+| `codigo` | QR or Code 128 | `kind`, `value`, `size`, `height`, `align` |
+| `columnas` | 1–3 side-by-side cells | `cols[[sections]]`, `widths`, `colGap` |
 | `espacio` / `salto` | Vertical space / page break | `height` |
 
 **Templates:** `{COL}`, `{SOURCE.COL}`, `{DOC.COL}`, `{PARAM.X}`, `{ITEM.P1_X}`, `{NOW}`, `{TODAY}`, `{PAGE}`/`{PAGES}` (footer), `{COL|format}`.
-**Formats:** `money`, `num:N`, `int`, `pct`, `date`, `upper`, `lower`, `yn` (`Y`/`S` → Sí).
+**Formats:** `money`, `num:N`, `int`, `pct`, `date`, `upper`, `lower`, `yn` (`Y`/`S` → Sí), `letras` / `letras:BALBOA/BALBOAS` (amount in Spanish words).
+**Any section:** `when` (show only if the condition holds), `formats` (`["pdf", "docx"]`).
 **Conditions:** `COL == 'X'`, `!=`, `>`, `<`, `>=`, `<=`, `COL`, `!COL`, joined with `&&` / `||`.
 **Rich text:** `**bold**`, `*italic*`, `***both***`, `~~strike~~`, `++underline++`, `[f=times]font[/f]`, `[c=#AA1E1E]color[/c]`.
 
@@ -232,6 +242,8 @@ Events on `document`: `novareport-start`, `novareport-progress`, `novareport-end
 | [04 · Image from BLOB](examples/04-imagen-blob) | Photo stored in a BLOB column. |
 | [05 · Multi-sheet Excel](examples/05-excel-multihoja) | Sheets by section `id`, grouped headers, reusable `defs`. |
 | [06 · Word template](examples/06-plantilla-word) | A `.docx` built in Word with tags and a repeating table row. |
+| [07 · Charts and codes](examples/07-graficos-codigos) | Bar and doughnut charts, a table with control breaks and subtotals, QR, Code 128 and a conditional watermark. |
+| [08 · Invoice with columns](examples/08-factura-columnas) | Customer and barcode side by side, amount in words next to the totals and two signatures on one line. |
 
 ## Testing without APEX
 
@@ -254,12 +266,18 @@ Requires Node 18 or later.
 
 | Topic | Detail | Workaround |
 |---|---|---|
-| **Ítems a enviar** (1.6.1) | The attribute value (`P5_A,P5_B`) is passed as a jQuery selector, so the items are not submitted. | Initialization code: `function (o) { if (o.items) { o.items = o.items.split(','); } return o; }` |
-| **Plantilla Word (URL)** (1.6.1) | `#APP_FILES#` is not replaced. | `function (o) { o.templateUrl = apex.env.APP_FILES + 'templates/letter.docx'; return o; }` |
+| **Ítems a enviar** (1.6.1–1.10.0) | The attribute value (`P5_A,P5_B`) was passed as a jQuery selector, so the items were not submitted. | Fixed in 1.11.0. Older versions: `function (o) { if (o.items) { o.items = o.items.split(','); } return o; }` |
+| **Plantilla Word (URL)** (1.6.1–1.10.0) | `#APP_FILES#` was not replaced. | Fixed in 1.11.0. Older versions: `function (o) { o.templateUrl = apex.env.APP_FILES + 'templates/letter.docx'; return o; }` |
 | PDF fonts | Helvetica, Times and Courier lack some symbols, such as **₡**. | TTF font support is planned. |
 | Dates | `DATE` columns travel as `DD/MM/YYYY`, without time. | `to_char(d, 'DD/MM/YYYY HH24:MI')` |
 | Size | 250,000 rows per request; batches and ZIPs are built in browser memory. | Split very large batches. |
 | UI texts | Waiting screen, progress and error messages are in Spanish. | |
+
+## novaReport Designer
+
+**novaReport Designer** is an APEX application built on this plugin to design reports **without writing JSON**: a drag-and-drop canvas with PDF, Excel and Word preview, templates organized in folders, role-based publishing, a **My reports** page for end users (with parameters and favorites) and **Saved documents**.
+
+The Designer is not part of this repository. The layouts it produces are the same JSON documented in [docs/DISENO.md](docs/DISENO.md), so anything built in the Designer runs on the plugin and vice versa. If you are interested in using it, open an *issue* in this repository.
 
 ## License and author
 
