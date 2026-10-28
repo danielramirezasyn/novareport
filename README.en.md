@@ -1,7 +1,7 @@
 # novaReport — PDF, Excel and Word for Oracle APEX
 
-[![Version](https://img.shields.io/badge/version-1.11.0-1F4E79)](CHANGELOG.md)
-[![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requirements)
+[![Version](https://img.shields.io/badge/version-1.12.0-1F4E79)](CHANGELOG.md)
+[![APEX](https://img.shields.io/badge/Oracle%20APEX-23.2%2B-C74634)](#requirements)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > 🇵🇦 [Leer en español](README.md)
@@ -37,6 +37,7 @@ The detailed reference ([docs/API.md](docs/API.md), [docs/DISENO.md](docs/DISENO
 | **One layout, three formats** | The same JSON produces PDF, Excel (`.xlsx` with colors, `=SUM()` totals, autofilter, multiple sheets) and Word (editable `.docx`). |
 | **Batches** | One file per document inside a **ZIP**, with an optional **summary** document; or every document **merged into a single file**. |
 | **Declarative layout** | Header band, key/value card, tables with totals (sum, average, min, max, count), control breaks with subtotals, grouped headers and conditional styles, alerts, rich text (bold, italic, underline, strike-through, colors, 3 fonts), images (URL or **BLOB**), charts, **QR** and **Code 128**, watermark, lines and **absolutely positioned** elements. |
+| **Fillable forms** | Fields the user fills in the generated file: text, multi-line text, list and checkbox, with initial values from SQL, read-only fields and a protected document (password-protected in Excel and Word). AcroForm in PDF, data validation in Excel and content controls in Word. |
 | **Columns** | **Side-by-side** cells (logo and details, customer and totals, signatures) that look the same in PDF and Word, and become column blocks in Excel. |
 | **Logic in the layout** | Sections and columns shown **conditionally** (`when`), amounts **in words** (Spanish: `MIL DOSCIENTOS BALBOAS CON 50/100`) and value formats. |
 | **Save on the server** | Besides delivering it, uploads the generated file to a process in your application to **archive it, email it or log the run**. |
@@ -47,13 +48,20 @@ The detailed reference ([docs/API.md](docs/API.md), [docs/DISENO.md](docs/DISENO
 
 ## Requirements
 
-- **Oracle APEX 26.1** or later (plugin API v2).
+- **Oracle APEX 26.1** or later (plugin API v2), or **APEX 23.2 – 24.x** with the variant in [`plugin/apex-23.2/`](plugin/apex-23.2).
 - A modern browser (Chrome, Edge, Firefox, Safari).
 - Access to `cdnjs.cloudflare.com` and `cdn.jsdelivr.net`, or the libraries served from your application ([how](docs/API.md#librerías-locales-sin-internet)).
 
 ## Installation
 
-1. Download [`plugin/dynamic_action_plugin_com_novacode_novareport.sql`](plugin/dynamic_action_plugin_com_novacode_novareport.sql).
+1. Download the export for your APEX version:
+
+   | APEX | File |
+   |---|---|
+   | 26.1 or later | [`plugin/dynamic_action_plugin_com_novacode_novareport.sql`](plugin/dynamic_action_plugin_com_novacode_novareport.sql) |
+   | 23.2 – 24.x | [`plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql`](plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql) |
+
+   Both have the same features and the same JavaScript; only the way APEX hands the configuration to the browser differs.
 2. In your application: **Shared Components → Plug-ins → Import**, pick the file and confirm.
 3. The action **NovaCode Report (PDF / Excel / Word)** is now available in every Dynamic Action.
 
@@ -134,6 +142,21 @@ select e.empno doc_key, e.ename, e.sal from emp e
 select h.empno doc_key, h.change_date, h.position from history h
 ```
 
+### Fillable forms
+
+The `formulario` section adds fields the user fills in the generated PDF, Excel or Word file. Initial values come from SQL; `optionsFrom` builds a list from another source.
+
+```json
+{ "type": "formulario", "source": "DOCS", "columns": 2, "fields": [
+  { "label": "Name",       "name": "name", "value": "{ENAME}", "maxLength": 30 },
+  { "label": "Department", "name": "dept", "input": "list", "value": "{DNAME}", "optionsFrom": "DEPTS.DNAME" },
+  { "label": "Salary",     "name": "salary", "value": "{SAL}", "fmt": "money", "readOnly": true },
+  { "label": "Agreed",     "name": "agreed", "input": "checkbox", "value": "S" },
+  { "label": "Comments",   "name": "comments", "input": "multiline", "lines": 4 } ] }
+```
+
+Types: `text`, `multiline`, `list` and `checkbox`. The document is protected by default (`"form": { "protect": true, "password": "" }` in the layout).
+
 ### Parameters from the element: `data-*`
 
 ```html
@@ -157,6 +180,8 @@ select h.empno doc_key, h.change_date, h.position from history h
 
 | Attribute (Spanish label) | Purpose |
 |---|---|
+| **Origen** | **Atributos**: sources and layout in this action. **Resolver**: a PL/SQL function returns them by report ID; the browser only sends the ID and the parameters. |
+| **Función resolver** | With Origen = Resolver: `f(p_id in varchar2, p_params in clob) return clob`. See [API.md §3.1](docs/API.md). |
 | **Fuentes SQL** | The queries (`--@NAME`). |
 | **Diseño (JSON)** | The layout, or the name of a global JS variable if it exceeds 4000 characters (`myLayouts.letter`). |
 | **Formato** | `pdf`, `xlsx`, `docx`, `docx-template`, `all`. |
@@ -165,7 +190,7 @@ select h.empno doc_key, h.change_date, h.position from history h
 | **PDF de un documento** | Open in a new tab (with a waiting screen) or download. |
 | **Plantilla Word (URL)** | `.docx` used by `docx-template`. |
 | **Mensaje de espera** | Waiting-screen text. |
-| *Initialization JavaScript Code* | Adjust options before running (format chosen on screen, extra parameters, hooks). |
+| *Initialization JavaScript Code* | Adjust options before running (format chosen on screen, extra parameters, `formPassword`, hooks). |
 
 ## Layout cheat sheet
 
@@ -179,7 +204,8 @@ select h.empno doc_key, h.change_date, h.position from history h
   "defs": { }, "xlsx": { "sheets": [ { "name": "Data", "sections": ["id1"] } ] },
   "batch": { "zipName": "batch_{TODAY}", "mergeName": "all", "chunkSize": 5, "maxDocs": 3000, "summary": { "sections": [ ] } },
   "watermark": { "text": "DRAFT", "when": "!PARAM.FINAL" },
-  "save": { "process": "MY_SAVE_PROCESS", "mode": "only" }
+  "save": { "process": "MY_SAVE_PROCESS", "mode": "only" },
+  "form": { "protect": true, "password": "" }
 }
 ```
 
@@ -187,6 +213,7 @@ select h.empno doc_key, h.change_date, h.position from history h
 |---|---|---|
 | `header` | Colored title band | `title`, `subtitle`, `right`, `size` |
 | `ficha` | Label / value pairs | `source`, `columns`, `fields[{label, value, fmt, map, when}]` |
+| `formulario` | Fillable fields | `source`, `columns`, `labelWidth`, `size`, `fields[{label, name, input, value, fmt, map, options, optionsFrom, maxLength, lines, readOnly, placeholder, when}]` |
 | `tabla` | Table | `source`, `columns[{col, label, fmt, align, bold, color, width, map, value, cellStyle, when}]`, `totals` (`sum`/`avg`/`min`/`max`/`count`), `breakBy`, `rowStyle`, `groups`, `filter`, `title`, `emptyText` |
 | `alerta` | Colored banner when a condition holds | `source`, `when`, `each`, `text`, `color` |
 | `texto` | Rich-text paragraphs | `text`, `align`, `size`, `lineHeight`, `font`, `color`, `x`/`y` (PDF) |
@@ -225,6 +252,7 @@ novaReport.libs.jspdf.url = '#APP_FILES#lib/jspdf.umd.min.js';
 ```js
 function (o) {
   o.format = apex.item('P5_FORMAT').getValue() || o.format;
+  o.formPassword = apex.item('P5_FORM_PWD').getValue();   // overrides form.password (Excel and Word)
   o.hooks = { pdfCell: function (h, row, col) { if (row.BALANCE < 0) { h.cell.styles.textColor = [170, 30, 30]; } } };
   return o;
 }
@@ -261,6 +289,8 @@ Requires Node 18 or later.
 - **Queries run on the server**; their text never reaches the browser.
 - **`data-*` values come from the browser and can be tampered with.** Validate access in every query (filter by `:APP_USER` or by protected session items).
 - A `data-*` attribute cannot override an APEX item with the same name: items always use session state.
+- With Origen **Resolver** the browser sends no SQL and no layout: only the report ID and the parameters, which your PL/SQL function validates.
+- `form.password` is stored in the layout as plain text. If the password is sensitive, pass it as `formPassword` from the *Initialization Code*.
 
 ## Known issues and limitations
 
@@ -269,8 +299,10 @@ Requires Node 18 or later.
 | **Ítems a enviar** (1.6.1–1.10.0) | The attribute value (`P5_A,P5_B`) was passed as a jQuery selector, so the items were not submitted. | Fixed in 1.11.0. Older versions: `function (o) { if (o.items) { o.items = o.items.split(','); } return o; }` |
 | **Plantilla Word (URL)** (1.6.1–1.10.0) | `#APP_FILES#` was not replaced. | Fixed in 1.11.0. Older versions: `function (o) { o.templateUrl = apex.env.APP_FILES + 'templates/letter.docx'; return o; }` |
 | PDF fonts | Helvetica, Times and Courier lack some symbols, such as **₡**. | TTF font support is planned. |
+| Forms | PDF: fields use Helvetica, Latin-1 only (**€** renders wrong), and protection does not encrypt the file. The password applies only to Excel and Word. `maxLength` is not applied in Word; `placeholder` only shows in Word. | |
 | Dates | `DATE` columns travel as `DD/MM/YYYY`, without time. | `to_char(d, 'DD/MM/YYYY HH24:MI')` |
 | Size | 250,000 rows per request; batches and ZIPs are built in browser memory. | Split very large batches. |
+| Attributes | 4000 characters per attribute (an APEX limit for dynamic actions), including **Fuentes SQL**. | Compact layout (no whitespace) or a global JavaScript variable. For sources and layout with no limit, Origen **Resolver**. |
 | UI texts | Waiting screen, progress and error messages are in Spanish. | |
 
 ## novaReport Designer

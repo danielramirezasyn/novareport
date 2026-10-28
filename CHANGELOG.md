@@ -1,5 +1,25 @@
 # Cambios
 
+## 1.12.0
+- Sección **`formulario`**: campos editables en el documento generado.
+  - Tipos (`input`): `text`, `multiline`, `list` y `checkbox`.
+  - `value` es una plantilla (`{COL}`) con `fmt` y `map`, igual que en `ficha`.
+  - Listas: opciones fijas (`options`) o desde una fuente (`optionsFrom: "FUENTE.COLUMNA"`; sin columna usa la primera). Si el valor inicial no está en las opciones, queda vacío.
+  - Casilla: la marcan `S`, `SI`, `SÍ`, `Y`, `YES`, `1`, `X`, `TRUE` u `ON`.
+  - Por campo: `maxLength` (recorta el valor inicial), `lines` (2 a 20, solo `multiline`), `readOnly`, `placeholder` y `when`.
+  - Sección: `source`, `columns` (defecto 2), `labelWidth` (32), `size` (8.5) y `when`. También va dentro de `columnas`.
+- Diseño: **`form`** con `protect` (defecto `true`) y `password`. La opción `formPassword` de `run` / *Initialization Code* tiene prioridad sobre `form.password`.
+- Validaciones:
+  - `name`: letras, números y `_` (hasta 40), sin parecer una celda de Excel (`A1`, `R1C1`).
+  - Nombres únicos por documento.
+  - Toda lista con `options` u `optionsFrom`.
+  - En salida unida (`merge`), los nombres llevan sufijo `_1`, `_2`…
+- Por formato:
+  - **PDF**: campos AcroForm (Helvetica, solo Latin-1) con el tamaño del primer formulario. La protección no cifra el archivo.
+  - **Excel**: celdas desbloqueadas con validación de lista, de largo y de casilla (☐/☒); hoja protegida, con contraseña opcional. Con `columns: 1` el valor no se combina a lo ancho.
+  - **Word**: controles de contenido (texto, lista desplegable y casilla) y protección "solo formularios", con contraseña opcional. `maxLength` no aplica; `placeholder` solo se ve en Word.
+- **APEX 23.2**: variante del plugin en `plugin/apex-23.2/`, con las mismas funciones. Se genera desde el export 26.1 con `plugin/to_apex232.py`: render de la API v1 (`javascript_function` + `attribute_NN`), sin `p_apexlang_name` ni `p_static_id`. Conserva los IDs, así que reemplaza el plugin existente y las acciones mantienen su configuración.
+
 ## 1.11.0
 - Sección **`columnas`**: 1 a 3 casillas lado a lado (`cols`, `widths`, `colGap`), cada una con sus secciones (ficha, texto, imagen, código, alerta, línea, tabla, gráfico, espacio). PDF: franjas; la fila no se parte entre páginas. Word: tabla sin bordes. Excel: bloques de columnas.
 - Corregido **Ítems a enviar**: el atributo (`P5_A,P5_B`) se envía como lista de ítems (antes se pasaba como selector jQuery y no se enviaban). Sigue aceptando un arreglo o un selector `#P5_A,#P5_B`.
