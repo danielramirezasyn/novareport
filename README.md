@@ -1,6 +1,6 @@
 # novaReport — PDF, Excel y Word para Oracle APEX
 
-[![Versión](https://img.shields.io/badge/versión-1.14.0-1F4E79)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versión-1.17.0-1F4E79)](CHANGELOG.md)
 [![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requisitos)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green)](LICENSE)
 
@@ -35,7 +35,7 @@ El servidor solo ejecuta las consultas; el documento se arma en el navegador con
 | **Un diseño, tres formatos** | El mismo JSON produce PDF, Excel (`.xlsx` con colores, totales con `=SUM()`, autofiltro, varias hojas) y Word (`.docx` editable). |
 | **Lotes** | Un archivo por documento dentro de un **ZIP**, con un documento de **resumen** opcional; o todos los documentos **unidos en un solo archivo**. |
 | **Diseño declarativo** | Encabezado, ficha de datos, tablas con totales (suma, promedio, mínimo, máximo, conteo), quiebres con subtotales, encabezados agrupados y estilos condicionales, alertas, texto enriquecido (negrita, cursiva, subrayado, tachado, colores, 3 letras), imágenes (URL o **BLOB**), gráficos, **QR** y **Code 128**, marca de agua, líneas y elementos en **posición fija**. |
-| **Tarjetas y cuadrículas** | **Tarjetas** de resumen (etiqueta + valor destacado), fichas en **cuadrícula** con etiquetas coloreadas y tablas con bordes y encabezado alineado a la izquierda o la derecha, iguales en los tres formatos. |
+| **Tarjetas y cuadrículas** | **Tarjetas** de resumen (etiqueta + valor destacado), fichas en **cuadrícula** con etiquetas coloreadas, **a la izquierda, arriba o sin etiqueta** por campo, y tablas con bordes y encabezado alineado a la izquierda o la derecha, iguales en los tres formatos. |
 | **Formularios editables** | Campos de texto, lista y casilla que el destinatario llena: AcroForm en PDF, controles de contenido en Word (protección *solo formularios* con contraseña) y celdas con validación en Excel (hoja protegida). |
 | **Columnas** | Casillas **lado a lado** (logo y datos, cliente y totales, firmas) que se ven igual en PDF y Word, y como bloques de columnas en Excel. |
 | **Lógica en el diseño** | Secciones y columnas que aparecen **según condiciones** (`when`), montos **en letras** (`MIL DOSCIENTOS BALBOAS CON 50/100`) y formatos de valor. |
@@ -152,8 +152,10 @@ Con salida **ZIP** obtiene un archivo por empleado; con **Un solo archivo**, tod
 
 | Atributo | Para qué |
 |---|---|
+| **Origen** | `Atributos` (por defecto), `Consulta` (diseño y/o SQL desde una tabla) o `Resolver` (función PL/SQL). |
 | **Fuentes SQL** | Las consultas (`--@NOMBRE`). |
-| **Diseño (JSON)** | El diseño, o el nombre de una variable JS global si pasa de 4000 caracteres (`misDisenos.carta`). |
+| **Diseño (JSON)** | El diseño, o el nombre de una variable JS global (`misDisenos.carta`). |
+| **Consulta del reporte** | Con origen `Consulta`: `select layout, fuentes as sources from mis_reportes where codigo = :P5_REPORTE`. Sin límite de 4000 caracteres ([docs/API.md §3.2](docs/API.md#32-origen-consulta)). |
 | **Formato** | `pdf`, `xlsx`, `docx`, `docx-template`, `all`. |
 | **Salida** | `file`, `zip`, `merge`. |
 | **Ítems a enviar** | Ítems que se guardan en sesión antes de consultar ([ver nota](#problemas-conocidos-y-limitaciones)). |
@@ -231,7 +233,7 @@ test/        Prueba en Node que genera todos los ejemplos sin APEX
 | Formularios en PDF | La protección no se cifra y todos los campos usan Helvetica con el tamaño del primer formulario. | Para un formulario protegido con contraseña use Word o Excel. |
 | Contraseña de Word | De 1 a 15 caracteres ASCII (sin tildes ni ñ). | |
 | Tamaño | Máximo 250,000 filas por petición; el lote y el ZIP se arman en memoria del navegador. | Divida lotes muy grandes. |
-| Atributos | 4000 caracteres. | Diseño en una variable JavaScript global. |
+| Atributos | 4000 caracteres. | Origen **Consulta**: diseño y fuentes en una tabla (CLOB). |
 
 ## novaReport Designer
 

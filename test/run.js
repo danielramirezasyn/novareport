@@ -238,4 +238,74 @@ fs.mkdirSync(OUT, { recursive: true });
       console.log('OK  ', 'estilos-114__' + format + '__' + r.name);
     }
   }
+  /* 1.15: huecos (empty) y span en ficha y formulario */
+  {
+    const layout = { fileName: 'casillas-115', sections: [
+      { type: 'ficha', source: 'DEPTOS', columns: 3, grid: true, fields: [
+        { label: 'Depto', value: '{DNAME}' }, { empty: true }, { label: 'Sede', value: '{LOC}' },
+        { label: 'Salarios', value: '{SALARIOS}', fmt: 'money', span: 2 }, { label: 'Emp.', value: '{EMPLEADOS}' },
+        { empty: true }, { label: 'Resto', value: 'fila', span: 'row' }] },
+      { type: 'formulario', columns: 3, fields: [
+        { label: 'Nombre', name: 'NOMBRE', span: 2 }, { label: 'Cód', name: 'COD' },
+        { empty: true, span: 2 }, { label: 'Activo', name: 'ACT', input: 'checkbox' },
+        { label: 'Notas', name: 'NOTAS', input: 'multiline', span: 'row' }] }] };
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const r = await window.novaReport.build({ layout, format, output: 'file', zipType: 'nodebuffer' }, data['01-listado-empleados']);
+      const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
+      fs.writeFileSync(path.join(OUT, 'casillas-115__' + format + '__' + r.name), buf);
+      if (format === 'xlsx') {
+        const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0], m = ws.model.merges.slice().sort().join(' ');
+        const top = ws.getCell('A1').value === 'Depto' ? 0 : -1;
+        if (top < 0 || ws.getCell('E1').value !== 'Sede' || ws.getCell('C1').value) { throw new Error('xlsx ficha empty: ' + [ws.getCell('A1').value, ws.getCell('C1').value, ws.getCell('E1').value]); }
+        if (m !== 'B2:D2 B5:D5 B7:F7 D3:F3') { throw new Error('xlsx merges: ' + m); }
+        const dn = wb.definedNames.model.map(d => d.name + ':' + d.ranges[0]).sort().join(' ');
+        if (dn !== 'ACT:Reporte!$F$6 COD:Reporte!$F$5 NOMBRE:Reporte!$B$5 NOTAS:Reporte!$B$7') { throw new Error('xlsx nombres: ' + dn); }
+      }
+      if (format === 'docx') {
+        const xml = await (await window.JSZip.loadAsync(buf)).file('word/document.xml').async('string');
+        const rows = xml.split('<w:tr>').slice(1).map(t => (t.match(/<w:tc>/g) || []).length + '/' + (t.match(/w:gridSpan w:val="(\d+)"/g) || []).map(g => g.match(/\d+/)[0]).join(','));
+        if (rows.join(' ') !== '5/2 4/3 3/2,3 4/3 3/4 2/5') { throw new Error('docx spans: ' + rows.join(' ')); }
+      }
+      console.log('OK  ', 'casillas-115__' + format + '__' + r.name);
+    }
+  }
+  /* 1.16: posición de la etiqueta (left, top, none) y estilo de etiqueta por sección y por campo */
+  {
+    const layout = { fileName: 'etiquetas-116', sections: [
+      { type: 'ficha', source: 'DEPTOS', columns: 3, grid: true, labelPosition: 'top', labelCase: 'upper', labelColor: '#5A6B7B', fields: [
+        { label: 'Depto', value: '{DNAME}', span: 2 }, { label: 'Salarios', value: '{SALARIOS}', fmt: 'money', align: 'right' },
+        { label: 'Sede', value: '{LOC}', labelPosition: 'left', labelCase: 'none' }, { label: 'Oculta', value: '{LOC}', labelPosition: 'none' },
+        { label: 'Emp.', value: '{EMPLEADOS}', labelSize: 6, labelColor: '#A61B1B', labelAlign: 'center' }] },
+      { type: 'formulario', columns: 2, labelPosition: 'top', fields: [
+        { label: 'Nombre', name: 'NOMBRE' }, { label: 'Tipo', name: 'TIPO', input: 'list', options: ['A', 'B'], labelPosition: 'left' },
+        { label: 'Notas', name: 'NOTAS', input: 'multiline', lines: 3, span: 'row' },
+        { label: 'Acepta', name: 'ACEPTA', input: 'checkbox', labelPosition: 'none' }, { label: 'Correo', name: 'CORREO', labelBold: false }] }] };
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const r = await window.novaReport.build({ layout, format, output: 'file', zipType: 'nodebuffer' }, data['01-listado-empleados']);
+      const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
+      fs.writeFileSync(path.join(OUT, 'etiquetas-116__' + format + '__' + r.name), buf);
+      if (format === 'pdf') {
+        const t = buf.toString('latin1');
+        for (const n of ['NOMBRE', 'TIPO', 'NOTAS', 'ACEPTA', 'CORREO']) { if (!new RegExp('/T \\(' + n + '\\)').test(t)) { throw new Error('pdf campo ' + n); } }
+      }
+      if (format === 'xlsx') {
+        const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0]; const cs = {};
+        ws.eachRow(row => row.eachCell(c => { if (c.value !== null && c.value !== '') { cs[String(c.value)] = c; } }));
+        const dep = cs.DEPTO, acc = cs.ACCOUNTING, sal = cs.SALARIOS;
+        if (!dep || !acc || acc.row !== dep.row + 1 || acc.col !== dep.col) { throw new Error('xlsx etiqueta arriba'); }
+        if (!sal || sal.alignment.horizontal !== 'right') { throw new Error('xlsx etiqueta arriba alineada con el valor'); }
+        if (!cs.Sede || cs.Oculta || cs.OCULTA) { throw new Error('xlsx left/none'); }
+        if (!cs['EMP.'] || cs['EMP.'].font.size !== 6 || cs['EMP.'].font.color.argb !== 'FFA61B1B') { throw new Error('xlsx estilo por campo'); }
+        const names = wb.definedNames.model.map(d => d.name);
+        for (const n of ['NOMBRE', 'TIPO', 'NOTAS', 'ACEPTA', 'CORREO']) { if (names.indexOf(n) < 0) { throw new Error('xlsx nombre ' + n); } }
+        if (!cs.Correo || cs.Correo.font.bold) { throw new Error('xlsx labelBold'); }
+      }
+      if (format === 'docx') {
+        const xml = await (await window.JSZip.loadAsync(buf)).file('word/document.xml').async('string');
+        if (!/>DEPTO</.test(xml) || /Oculta|OCULTA/.test(xml) || !/>Sede</.test(xml) || !/A61B1B/.test(xml)) { throw new Error('docx etiquetas'); }
+        if ((xml.match(/<w:sdt>/g) || []).length !== 5) { throw new Error('docx controles de contenido'); }
+      }
+      console.log('OK  ', 'etiquetas-116__' + format + '__' + r.name);
+    }
+  }
 })().catch(e => { console.error('FALLÓ', e); process.exit(1); });

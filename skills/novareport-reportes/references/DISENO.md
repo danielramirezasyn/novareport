@@ -255,6 +255,53 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
   "color": { "by": "ESTADO", "values": { "M": "#A61B1B" }, "default": "#000000" } }
 ```
 
+**Huecos y campos anchos** (`ficha` y `formulario`). Los campos se acomodan en orden, `columns` por fila. Dos propiedades cambian ese orden:
+
+| Propiedad | Descripción |
+|---|---|
+| `{ "empty": true }` | Hueco: ocupa una casilla (etiqueta + valor) sin dibujar nada. Admite `span` y `when`. |
+| `span` | Casillas que ocupa el campo (o el hueco): `2`, `3`… hasta `columns`, o `"row"` para el resto de la fila. El valor se extiende a lo ancho; la etiqueta queda a la izquierda. |
+
+Un campo que no cabe en lo que queda de la fila empieza una fila nueva. Con huecos o `span`, en PDF las columnas de valor toman el mismo ancho para que la grilla quede pareja.
+
+```json
+"columns": 3, "fields": [
+  { "label": "Cliente", "value": "{CLIENTE}" }, { "label": "Cuenta", "value": "{CUENTA}" }, { "empty": true },
+  { "label": "Dirección", "value": "{DIRECCION}", "span": 2 }, { "label": "Tipo", "value": "{TIPO}" },
+  { "label": "Observaciones", "value": "{OBS}", "span": "row" } ]
+```
+
+- **PDF:** celdas combinadas; los huecos van sin bordes ni fondo.
+- **Excel:** el valor se combina a lo ancho; el hueco deja las celdas vacías.
+- **Word:** celdas combinadas (`gridSpan`); en cuadrícula, el hueco va sin bordes.
+
+**Posición y estilo de la etiqueta** (`ficha` y `formulario`, 1.16). Se definen en la sección y cada campo los puede cambiar.
+
+| Propiedad | Valores | Descripción |
+|---|---|---|
+| `labelPosition` | `left` (defecto), `top`, `none` | `top`: la etiqueta va sobre el valor, en la misma casilla. `none`: sin etiqueta; el valor ocupa la casilla completa. |
+| `labelSize` | pt | Tamaño de la etiqueta. Sin valor: el de la sección a la izquierda; arriba, un 15 % menor. |
+| `labelColor` | `#RRGGBB` | Color de la etiqueta. |
+| `labelFill` | `#RRGGBB` | Fondo de la etiqueta (arriba: una franja sobre el valor). |
+| `labelBold` | `true` (defecto) / `false` | Etiqueta en negrita. |
+| `labelCase` | `upper`, `none` | Etiqueta en mayúsculas. `none` en un campo anula el `upper` de la sección. |
+| `labelAlign` | `left`, `center`, `right` | Alineación de la etiqueta. Arriba, sin valor sigue la alineación del valor (`align`). |
+
+```json
+{ "type": "ficha", "columns": 3, "grid": true, "labelPosition": "top", "labelCase": "upper", "labelColor": "#5A6B7B",
+  "fields": [
+    { "label": "Cliente", "value": "{CLIENTE}", "span": 2 },
+    { "label": "Saldo",   "value": "{SALDO}", "fmt": "money", "align": "right" },
+    { "label": "Cuenta",  "value": "{CUENTA}", "labelPosition": "left", "labelCase": "none" },
+    { "label": "Firma",   "value": "{FIRMA}",  "labelPosition": "none" } ] }
+```
+
+Se combina con `span` y huecos. En una misma fila pueden convivir campos con la etiqueta a la izquierda, arriba y sin etiqueta.
+
+- **PDF:** la casilla es una sola celda; la etiqueta se dibuja arriba y el valor (o el campo editable) debajo.
+- **Excel:** una fila con etiquetas arriba ocupa dos filas reales: la de etiquetas y la de valores. Los campos de esa fila con la etiqueta a la izquierda combinan las dos filas. En `formulario`, el nombre definido apunta a la celda del valor.
+- **Word:** una celda con dos párrafos; en `formulario`, el control de contenido va en una caja bajo la etiqueta.
+
 ### `tabla`
 
 ```json
@@ -496,6 +543,9 @@ Campos **editables** (texto, texto de varias líneas, lista y casilla de verific
 | `fields[].lines` | `3` | `multiline`: líneas visibles (2 a 20). |
 | `fields[].placeholder` | — | Texto de ayuda (solo Word). |
 | `fields[].readOnly` | `false` | Campo de solo lectura. |
+| `fields[].span` | `1` | Casillas que ocupa (`2`, `3`… o `"row"`). Ver [huecos y campos anchos](#ficha). |
+| `{ "empty": true }` | — | Hueco en la grilla. Ver [huecos y campos anchos](#ficha). |
+| `labelPosition`, `labelSize`, `labelColor`, `labelFill`, `labelBold`, `labelCase`, `labelAlign` | — | En la sección y en cada campo. Ver [posición y estilo de la etiqueta](#ficha). |
 | `form.protect` | `true` | Protege el documento para que solo se editen los campos (Word: *solo formularios*; Excel: hoja protegida con las celdas de los campos desbloqueadas). |
 | `form.password` | — | Contraseña de la protección (Word y Excel). `run({ formPassword })` tiene prioridad. En Word: 1 a 15 caracteres ASCII. |
 
@@ -560,6 +610,8 @@ Pone 2 o 3 casillas **lado a lado**; cada casilla lleva sus propias secciones. S
 | `ficha` | ✓ | ✓ valores reales | ✓ |
 | `ficha.grid`, `labelFill`, `labelColor`, `valueColor` | ✓ | ✓ | ✓ |
 | `ficha.fields[]`: `align`, `bold`, `color`, `fill` | ✓ | ✓ | ✓ |
+| `ficha` / `formulario`: `span`, `empty` | ✓ | ✓ | ✓ |
+| `ficha` / `formulario`: `labelPosition` (`left`, `top`, `none`) y estilo de etiqueta | ✓ | ✓ | ✓ |
 | `header`: `subtitleSize`, `rightSize`, `font`, `fill`, `color` | ✓ | ✓ | ✓ |
 | `header.height` | ✓ | — | — |
 | `formulario` | ✓ AcroForm | ✓ celdas editables | ✓ controles de contenido |

@@ -45,8 +45,9 @@ El diseño JSON (secciones, columnas, estilos) está en [DISENO.md](DISENO.md).
 
 | # | Atributo | Clave interna | Tipo | Valor por defecto | Descripción |
 |---|---|---|---|---|---|
-| 0 | **Origen** | `origin` | Lista | `attributes` | `attributes`: fuentes y diseño en esta acción. `resolver`: los decide una función PL/SQL por ID de reporte. Ver [§3.1](#31-origen-resolver). |
+| 0 | **Origen** | `origin` | Lista | `attributes` | `attributes`: fuentes y diseño en esta acción. `query`: el diseño y/o las fuentes salen de una consulta a una tabla ([§3.2](#32-origen-consulta)). `resolver`: los decide una función PL/SQL por ID de reporte ([§3.1](#31-origen-resolver)). |
 | 0 | **Función resolver** | `resolver` | Texto | `mi_pkg.resolver` | Solo con origen `resolver`. |
+| 0 | **Consulta del reporte** | `report_query` | Textarea | — | Solo con origen `query`. Devuelve una fila con `LAYOUT` y/o `SOURCES`. Ver [§3.2](#32-origen-consulta). |
 | 1 | **Fuentes SQL** | `sources` | Textarea | — | Una o varias consultas, cada una precedida de `--@NOMBRE`. Ver [§3](#3-fuentes-sql). |
 | 2 | **Diseño (JSON)** | `layout` | Textarea | — | El diseño en JSON, o la ruta a una variable JavaScript global que lo contenga (`misDisenos.carta`). |
 | 3 | **Formato** | `format` | Lista | `pdf` | `pdf`, `xlsx`, `docx`, `docx-template` o `all` (PDF + Excel + Word). |
@@ -57,7 +58,7 @@ El diseño JSON (secciones, columnas, estilos) está en [DISENO.md](DISENO.md).
 | 8 | **Mensaje de espera** | `message` | Texto | `Consultando datos...` | Texto de la pantalla de espera del PDF. |
 | — | *Initialization JavaScript Code* | estándar de APEX | Función JS | — | Permite modificar las opciones antes de ejecutar. Ver [§8](#8-código-de-inicialización). |
 
-> **Diseños de más de 4000 caracteres.** Los atributos de APEX admiten 4000 caracteres. Para diseños más grandes defina el JSON en *Function and Global Variable Declaration* de la página (o en un archivo estático) y escriba en el atributo el nombre de la variable:
+> **Diseños de más de 4000 caracteres.** Los atributos de APEX admiten 4000 caracteres (`VARCHAR2(4000)`). Para diseños o fuentes más grandes use el origen **Consulta** ([§3.2](#32-origen-consulta)) y guárdelos en una tabla (CLOB). También puede definir el JSON en *Function and Global Variable Declaration* de la página (o en un archivo estático) y escribir en el atributo el nombre de la variable:
 >
 > ```js
 > var misDisenos = { plan: { "page": { "size": "legal" }, "sections": [ ... ] } };
@@ -151,6 +152,39 @@ El plugin no crea ni exige tablas: cualquier función con este contrato sirve. U
 // Initialization JavaScript Code: armar ID y parámetros; devolver false cancela
 function (o) { o.report = 21; o.params = { CUENTA: $v('P5_CUENTA') }; return o; }
 ```
+
+### 3.2 Origen "Consulta"
+
+Con **Origen** = `query` el diseño y/o las fuentes SQL se leen de **una tabla suya** (CLOB, sin el límite de 4000 caracteres). No hace falta función, resolver ni el Designer: solo una consulta en el atributo **Consulta del reporte** que devuelva **una fila**.
+
+```sql
+-- Tabla de ejemplo (el nombre y las columnas son libres)
+create table mis_reportes (
+  codigo  varchar2(50) primary key,
+  layout  clob check (layout is json),
+  fuentes clob
+);
+```
+
+```sql
+-- Atributo "Consulta del reporte"
+select layout, fuentes as sources
+  from mis_reportes
+ where codigo = :P5_REPORTE
+```
+
+| Columna (alias) | Contenido | Si no viene |
+|---|---|---|
+| `LAYOUT` | Diseño JSON | Se usa el atributo **Diseño (JSON)** |
+| `SOURCES` | Fuentes SQL con líneas `--@NOMBRE` | Se usa el atributo **Fuentes SQL** |
+| `TEMPLATE_URL` | URL de la plantilla Word (admite `#APP_FILES#`) | Se usa el atributo **Plantilla Word** |
+
+- La consulta debe devolver al menos `LAYOUT` o `SOURCES`. Puede guardar solo el diseño (y dejar las fuentes en el atributo), solo las fuentes, o ambos.
+- Binds: como en las fuentes SQL ([§3](#binds)). Los ítems de APEX se enlazan solos (envíelos con **Ítems a enviar**) y los demás binds toman su valor de `data-*` (`data-reporte="PLAN"` → `:REPORTE`).
+- La consulta y las fuentes se ejecutan en la misma llamada AJAX. Las fuentes SQL no viajan al navegador; el diseño sí, como siempre.
+- Errores: 0 filas, más de una fila, sin `LAYOUT` ni `SOURCES`, o `LAYOUT` que no es JSON válido ([§11](#11-errores)).
+
+> **Seguridad.** El SQL guardado en la tabla se ejecuta con los privilegios del esquema de análisis. Quien pueda escribir en esa tabla puede ejecutar cualquier consulta: limite `INSERT`/`UPDATE` a los desarrolladores. Si cada usuario debe ver solo ciertos reportes, filtre en la propia consulta (`and exists (select 1 from acceso … :APP_USER …)`) o use el origen Resolver.
 
 ## 4. Documentos: `DOCS` y `DOC_KEY`
 
@@ -427,6 +461,11 @@ El prefijo `ORA-nnnnn:` del primer error se elimina antes de mostrarlo.
 | `No se pudo descargar la plantilla (404)` | URL de plantilla incorrecta. |
 | `Formato no soportado: X` | Valor de `format` / `data-format` inválido. |
 | `Error de comunicación: …` | Falla HTTP del AJAX (sesión expirada, error 500). |
+| `Configure la consulta del reporte (origen Consulta).` | Origen `query` con el atributo vacío. |
+| `La consulta del reporte no devolvió filas.` / `…devolvió más de una fila.` | La consulta del reporte debe devolver exactamente una fila. |
+| `La consulta del reporte debe devolver las columnas LAYOUT y/o SOURCES.` | Faltan los alias reconocidos. |
+| `La columna LAYOUT no es un JSON válido: …` | JSON mal formado en la tabla. |
+| `Falta el diseño: la consulta del reporte no devolvió LAYOUT y el atributo Diseño está vacío.` | Origen `query` sin diseño en ninguno de los dos lados. |
 
 ## 12. Límites
 
@@ -435,7 +474,7 @@ El prefijo `ORA-nnnnn:` del primer error se elimina antes de mostrarlo.
 | Filas por petición | **250,000** en total, sumando todas las fuentes | `c_max_rows` en `plugin.plsql` |
 | Documentos por lote | `batch.maxDocs` (sin límite si no se define) | Diseño |
 | Documentos por bloque | `batch.chunkSize` (defecto 5) | Diseño. Bloques chicos mantienen la página receptiva. |
-| Texto de atributos | 4000 caracteres | APEX. Use una variable global para el diseño. |
+| Texto de atributos | 4000 caracteres | APEX. Use el origen Consulta ([§3.2](#32-origen-consulta)) o una variable global. |
 | Memoria | La del navegador | Todo el lote y el ZIP se arman en memoria. |
 
 ## 13. Seguridad
@@ -449,4 +488,5 @@ El prefijo `ORA-nnnnn:` del primer error se elimina antes de mostrarlo.
   ```
 - Un `data-*` no puede reemplazar un ítem de APEX: si el bind existe como ítem, siempre se usa el valor de sesión. Para valores sensibles use ítems con *Session State Protection*.
 - Las consultas corren con los privilegios del esquema de análisis de la aplicación, igual que cualquier región.
+- Con el origen Consulta, el SQL guardado en su tabla se ejecuta igual que el de los atributos: restrinja la escritura en esa tabla a los desarrolladores.
 - Las librerías se cargan desde cdnjs y jsDelivr. Si su política lo exige, sírvalas localmente ([§7](#librerías-locales-sin-internet)).

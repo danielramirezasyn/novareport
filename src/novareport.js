@@ -1,5 +1,5 @@
 /*!
- * novaReport 1.14.0 - Reportes PDF / Excel / Word para Oracle APEX
+ * novaReport 1.17.0 - Reportes PDF / Excel / Word para Oracle APEX
  * https://github.com/danielramirezasyn/novareport - Licencia MIT
  * NovaCode - plugin de Acción Dinámica COM.NOVACODE.NOVAREPORT
  *
@@ -10,7 +10,7 @@
 window.novaReport = (function () {
   'use strict';
 
-  var VERSION = '1.14.0';
+  var VERSION = '1.17.0';
 
   /* ------------------------------------------------------------------ librerías */
   var LIBS = {
@@ -420,6 +420,7 @@ window.novaReport = (function () {
   function formFields(sec, ctx, suffix) {
     var fr = rowsOf(sec, ctx)[0] || {};
     return (sec.fields || []).filter(function (f) { return f && (!f.when || cond(f.when, ctx, fr)); }).map(function (f) {
+      if (f.empty) { return { empty: true, span: f.span }; }
       var input = String(f.input || 'text').toLowerCase();
       if (!FORM_INPUTS[input]) { throw new Error('Tipo de campo no soportado: "' + f.input + '" (text, multiline, list, checkbox).'); }
       var name = formName(f.name) + (suffix || '');
@@ -434,7 +435,7 @@ window.novaReport = (function () {
                value: input === 'checkbox' ? '' : val, checked: input === 'checkbox' && truthy(val),
                maxLength: max, readOnly: f.readOnly === true,
                lines: input === 'multiline' ? Math.max(2, Math.min(20, Number(f.lines) || 3)) : 1,
-               placeholder: f.placeholder ? tpl(f.placeholder, ctx, fr) : '' };
+               placeholder: f.placeholder ? tpl(f.placeholder, ctx, fr) : '', span: f.span, lab: labelOf(f, sec) };
     });
   }
   /* Protección del formulario: layout.form.protect (defecto true) y contraseña (la de run() tiene prioridad) */
@@ -542,11 +543,77 @@ window.novaReport = (function () {
   function labelW(sec, i) { var a = sec.labelWidths; return (Array.isArray(a) && Number(a[i]) > 0) ? Number(a[i]) : (sec.labelWidth || 32); }
   /* Alineación del encabezado de una columna: columna > tabla > centro; "auto" = la de los datos */
   function headAlignOf(c, sec) { var a = c.headAlign || sec.headAlign || 'center'; return a === 'auto' ? c.align : a; }
+  /* ---------- Casillas de ficha y formulario (1.15): "span" (casillas que ocupa; "row" = el resto de la fila) y "empty" (hueco).
+     Devuelve filas de { f, col, span, empty }; un campo que no cabe en lo que queda de la fila empieza una fila nueva. */
+  function slotRows(items, n) {
+    var rows = [], cur = [], used = 0;
+    items.forEach(function (f) {
+      var sp = f && f.span === 'row' ? (n - used) : Math.max(1, Math.min(n, Math.floor(Number(f && f.span)) || 1));
+      if (used + sp > n) { rows.push(cur); cur = []; used = 0; }
+      cur.push({ f: f, col: used, span: sp, empty: !!(f && f.empty) });
+      used += sp;
+      if (used === n) { rows.push(cur); cur = []; used = 0; }
+    });
+    if (cur.length) { rows.push(cur); }
+    return rows;
+  }
+  function hasSlots(fields) { return (fields || []).some(function (f) { return f && (f.empty || (f.span && f.span !== 1)); }); }
+  function slotUsed(row) { return row.reduce(function (a, sl) { return a + sl.span; }, 0); }
   /* ---------- Estilo por campo de ficha (1.14): align, bold, color (fijo o según columna), fill */
   function fieldStyle(f, ctx, row) {
     if (!f || !(f.align || f.bold || f.color || f.fill)) { return null; }
     var al = /^(left|center|right)$/.test(f.align || '') ? f.align : null;
     return { align: al, bold: !!f.bold, color: f.color ? colorOf(f.color, ctx, row) : null, fill: f.fill || null };
+  }
+  /* ---------- Etiqueta de ficha y formulario (1.16): posición (left, top, none) y estilo, por sección o por campo */
+  var LABEL_POS = { left: 1, top: 1, none: 1 };
+  function labelOf(f, sec) {
+    function g(k) { return f && f[k] !== undefined && f[k] !== null && f[k] !== '' ? f[k] : sec[k]; }
+    var pos = String(g('labelPosition') || 'left').toLowerCase(), al = g('labelAlign'), bo = g('labelBold');
+    var lb = { pos: LABEL_POS[pos] ? pos : 'left', size: Number(g('labelSize')) > 0 ? Number(g('labelSize')) : 0,
+               color: g('labelColor') || null, bold: bo === undefined || bo === null ? true : (bo !== false && bo !== 'false'),
+               upper: String(g('labelCase') || '').toLowerCase() === 'upper',
+               align: /^(left|center|right)$/.test(al || '') ? al : null, fill: g('labelFill') || null };
+    lb.styled = !!(f && (f.labelSize || f.labelColor || (f.labelBold !== undefined && f.labelBold !== null) || f.labelCase || f.labelAlign || f.labelFill)) ||
+                !!(sec.labelSize || (sec.labelBold !== undefined && sec.labelBold !== null) || sec.labelCase || sec.labelAlign);
+    return lb;
+  }
+  /* Excel: letra y alineación de una etiqueta con estilo propio */
+  function xlsLab(c, lb, top, defAlign) {
+    var ft = { bold: lb.bold };
+    if (lb.size || top) { ft.size = lb.size || 9; }
+    if (lb.color) { ft.color = { argb: argb(lb.color) }; }
+    c.font = ft;
+    var ha = lb.align || (top ? defAlign : null);
+    if (ha || top) {
+      var al = {}; Object.keys(c.alignment || {}).forEach(function (q) { al[q] = c.alignment[q]; });
+      if (ha) { al.horizontal = ha; }
+      if (top) { al.vertical = 'bottom'; }
+      c.alignment = al;
+    }
+    if (lb.fill) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(lb.fill) } }; }
+  }
+  function labelText(t, lb) { return lb.upper ? String(t).toUpperCase() : t; }
+  function anyStacked(sec) { return (sec.fields || []).some(function (f) { return f && !f.empty && labelOf(f, sec).pos !== 'left'; }); }
+  /* PDF: etiqueta arriba dibujada sobre la celda (el valor va debajo, con relleno superior) */
+  function pdfLabSize(lb, fsz) { return lb.size || Math.max(5, Math.round(fsz * 1.7) / 2); }
+  function pdfLabTop(lb, fsz) { return pdfLabSize(lb, fsz) * 0.3528 * 1.2 + 0.4; }
+  function pdfLabStyle(lb) {
+    var st = { fontStyle: lb.bold ? 'bold' : 'normal' };
+    if (lb.size) { st.fontSize = lb.size; }
+    if (lb.color) { st.textColor = hexRgb(lb.color); }
+    if (lb.fill) { st.fillColor = hexRgb(lb.fill); }
+    if (lb.align) { st.halign = lb.align; }
+    return st;
+  }
+  function pdfLabel(doc, cell, L, fsz, pad) {
+    var lb = L.lb, sz = pdfLabSize(lb, fsz), lh = sz * 0.3528;
+    if (lb.fill) { var lf = hexRgb(lb.fill); doc.setFillColor(lf[0], lf[1], lf[2]); doc.rect(cell.x + 0.1, cell.y + 0.1, cell.width - 0.2, pad + lh * 1.2 + 0.1, 'F'); }
+    var lc = hexRgb(lb.color || '#000000'), tw = Math.max(5, cell.width - pad * 2);
+    doc.setFont('helvetica', lb.bold ? 'bold' : 'normal'); doc.setFontSize(sz); doc.setTextColor(lc[0], lc[1], lc[2]);
+    var tx = L.align === 'right' ? cell.x + cell.width - pad : (L.align === 'center' ? cell.x + cell.width / 2 : cell.x + pad);
+    doc.text(doc.splitTextToSize(String(L.text), tw)[0] || '', tx, cell.y + pad + lh * 0.95, { align: L.align === 'right' || L.align === 'center' ? L.align : 'left' });
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0);
   }
   /* ---------- Encabezado (1.14): tamaños, letra y colores propios */
   function headerOf(sec, th) {
@@ -556,7 +623,7 @@ window.novaReport = (function () {
   /* ---------- Tarjetas (1.13): etiqueta pequeña + valor destacado, con barra de acento a la izquierda */
   function cardsOf(sec, ctx, th) {
     var fr = rowsOf(sec, ctx)[0] || {};
-    var items = (sec.fields || sec.items || []).filter(function (f) { return f && (!f.when || cond(f.when, ctx, fr)); }).map(function (f) {
+    var items = (sec.fields || sec.items || []).filter(function (f) { return f && !f.empty && (!f.when || cond(f.when, ctx, fr)); }).map(function (f) {
       return { label: tpl(f.label, ctx, fr), value: fieldText(f, ctx, fr), color: f.color ? colorOf(f.color, ctx, fr) : null };
     });
     var n = Math.max(1, Math.min(6, Number(sec.columns) || Math.min(items.length, 6) || 1));
@@ -1170,30 +1237,63 @@ window.novaReport = (function () {
           return;
         }
         if (t === 'ficha') {
-          var fr = rowsOf(sec, ctx)[0] || {}, n = sec.columns || 3, body = [], cur = [], cs = {};
-          (sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }).forEach(function (f) {
-            var fst0 = fieldStyle(f, ctx, fr), fv0 = fieldText(f, ctx, fr);
-            if (fst0) {
-              var fsx = {};
-              if (fst0.align) { fsx.halign = fst0.align; }
-              if (fst0.bold) { fsx.fontStyle = 'bold'; }
-              if (fst0.color) { fsx.textColor = hexRgb(fst0.color); }
-              if (fst0.fill) { fsx.fillColor = hexRgb(fst0.fill); }
-              fv0 = { content: fv0, styles: fsx };
-            }
-            cur.push(tpl(f.label, ctx, fr), fv0);
-            if (cur.length === n * 2) { body.push(cur); cur = []; }
+          var fr = rowsOf(sec, ctx)[0] || {}, n = sec.columns || 3, body = [], cs = {};
+          slotRows((sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }), n).forEach(function (row) {
+            var cur = [];
+            row.forEach(function (sl) {
+              var f = sl.f;
+              if (sl.empty) { cur.push({ content: '', colSpan: sl.span * 2, styles: { lineWidth: 0, fillColor: false } }); return; }
+              var lb0 = labelOf(f, sec), fst0 = fieldStyle(f, ctx, fr), fv0 = fieldText(f, ctx, fr);
+              if (lb0.pos !== 'left') {    /* 1.16: la casilla es una sola celda (etiqueta arriba o sin etiqueta) */
+                var stx = { fontStyle: fst0 && fst0.bold ? 'bold' : 'normal', fillColor: fst0 && fst0.fill ? hexRgb(fst0.fill) : false,
+                            textColor: hexRgb((fst0 && fst0.color) || sec.valueColor || '#000000'), halign: (fst0 && fst0.align) || 'left' };
+                var vcl = { content: fv0, colSpan: sl.span * 2, styles: stx };
+                if (lb0.pos === 'top') { vcl._nrLab = { text: labelText(tpl(f.label, ctx, fr), lb0), lb: lb0, align: lb0.align || stx.halign }; }
+                cur.push(vcl);
+                return;
+              }
+              if (fst0 || sl.span > 1) {
+                var fsx = {};
+                if (fst0 && fst0.align) { fsx.halign = fst0.align; }
+                if (fst0 && fst0.bold) { fsx.fontStyle = 'bold'; }
+                if (fst0 && fst0.color) { fsx.textColor = hexRgb(fst0.color); }
+                if (fst0 && fst0.fill) { fsx.fillColor = hexRgb(fst0.fill); }
+                fv0 = { content: fv0, styles: fsx };
+                if (sl.span > 1) { fv0.colSpan = sl.span * 2 - 1; }
+              }
+              var lt0 = tpl(f.label, ctx, fr);
+              cur.push(lb0.styled ? { content: labelText(lt0, lb0), styles: pdfLabStyle(lb0) } : lt0, fv0);
+            });
+            for (var pu = slotUsed(row) * 2; pu < n * 2; pu++) { cur.push(''); }
+            body.push(cur);
           });
-          if (cur.length) { while (cur.length < n * 2) { cur.push(''); } body.push(cur); }
+          var fvw = 0, stk = anyStacked(sec);
+          if (hasSlots(sec.fields) || stk) {    /* con huecos o span: columnas de valor del mismo ancho para que la grilla quede pareja */
+            var flw = 0; for (var fq = 0; fq < n; fq++) { flw += labelW(sec, fq); }
+            fvw = Math.max(10, (W - XL - XR - flw) / n);
+          }
           for (var i = 0; i < n * 2; i += 2) {
             cs[i] = { fontStyle: 'bold', cellWidth: labelW(sec, i / 2) };
+            if (fvw) { cs[i + 1] = { cellWidth: fvw }; }
             if (sec.labelFill) { cs[i].fillColor = hexRgb(sec.labelFill); }
             if (sec.labelColor) { cs[i].textColor = hexRgb(sec.labelColor); }
-            if (sec.valueColor) { cs[i + 1] = { textColor: hexRgb(sec.valueColor) }; }
+            if (sec.valueColor) { cs[i + 1] = cs[i + 1] || {}; cs[i + 1].textColor = hexRgb(sec.valueColor); }
           }
           var fst = { fontSize: sec.size || 8.5, cellPadding: 0.9 };
           if (sec.grid) { fst.cellPadding = 1.6; fst.valign = 'middle'; fst.lineWidth = 0.15; fst.lineColor = hexRgb(sec.borderColor || GRID_LINE); }
-          doc.autoTable({ startY: y, body: body, theme: 'plain', margin: { left: XL, right: XR }, styles: fst, columnStyles: cs });
+          var fto = { startY: y, body: body, theme: 'plain', margin: { left: XL, right: XR }, styles: fst, columnStyles: cs };
+          if (stk) {
+            var fsz0 = fst.fontSize, fpd = fst.cellPadding;
+            fto.didParseCell = function (d) {
+              var L = d.section === 'body' && d.cell.raw && d.cell.raw._nrLab;
+              if (L) { d.cell.styles.cellPadding = { top: fpd + pdfLabTop(L.lb, fsz0), right: fpd, bottom: fpd, left: fpd }; }
+            };
+            fto.didDrawCell = function (d) {
+              var L = d.section === 'body' && d.cell.raw && d.cell.raw._nrLab;
+              if (L) { pdfLabel(doc, d.cell, L, fsz0, fpd); }
+            };
+          }
+          doc.autoTable(fto);
           gap(2);
           return;
         }
@@ -1229,26 +1329,49 @@ window.novaReport = (function () {
         }
         if (t === 'formulario') {
           if (!doc.__nrForm) { doc.__nrForm = formNames(); }
-          var ffs = formFields(sec, ctx, suffix), nf = sec.columns || 2, fbody = [], fcur = [], fpos = {}, fcs = {}, fsz = sec.size || 8.5;
-          ffs.forEach(function (f) {
-            doc.__nrForm(f.name);
-            fpos[fbody.length + ':' + (fcur.length + 1)] = f;
-            fcur.push(f.label, '');
-            if (fcur.length === nf * 2) { fbody.push(fcur); fcur = []; }
+          var ffs = formFields(sec, ctx, suffix), nf = sec.columns || 2, fbody = [], fpos = {}, fcs = {}, fsz = sec.size || 8.5;
+          slotRows(ffs, nf).forEach(function (row) {
+            var fcur = [];
+            row.forEach(function (sl) {
+              var f = sl.f;
+              if (sl.empty) { fcur.push({ content: '', colSpan: sl.span * 2 }); return; }
+              doc.__nrForm(f.name);
+              if (f.lab.pos !== 'left') {    /* 1.16: etiqueta arriba o sin etiqueta: el campo ocupa la casilla completa */
+                fpos[fbody.length + ':' + (sl.col * 2)] = f;
+                var fc0 = { content: '', colSpan: sl.span * 2, styles: { fontStyle: 'normal' } };
+                if (f.lab.pos === 'top') { fc0._nrLab = { text: labelText(f.label, f.lab), lb: f.lab, align: f.lab.align || 'left' }; }
+                fcur.push(fc0);
+                return;
+              }
+              fpos[fbody.length + ':' + (sl.col * 2 + 1)] = f;
+              fcur.push(f.lab.styled ? { content: labelText(f.label, f.lab), styles: pdfLabStyle(f.lab) } : f.label,
+                        sl.span > 1 ? { content: '', colSpan: sl.span * 2 - 1 } : '');
+            });
+            for (var pu = slotUsed(row) * 2; pu < nf * 2; pu++) { fcur.push(''); }
+            fbody.push(fcur);
           });
-          if (fcur.length) { while (fcur.length < nf * 2) { fcur.push(''); } fbody.push(fcur); }
           if (!fbody.length) { return; }
-          for (var fi = 0; fi < nf * 2; fi += 2) { fcs[fi] = { fontStyle: 'bold', cellWidth: sec.labelWidth || 32 }; }
+          var fvw2 = hasSlots(sec.fields) || anyStacked(sec) ? Math.max(10, (W - XL - XR - (sec.labelWidth || 32) * nf) / nf) : 0;
+          for (var fi = 0; fi < nf * 2; fi += 2) { fcs[fi] = { fontStyle: 'bold', cellWidth: sec.labelWidth || 32 }; if (fvw2) { fcs[fi + 1] = { cellWidth: fvw2 }; } }
           var lineH = 0.3528 * fsz * 1.3;
           doc.autoTable({ startY: y, body: fbody, theme: 'plain', margin: { left: XL, right: XR }, rowPageBreak: 'avoid',
             styles: { fontSize: fsz, cellPadding: 1.2, valign: 'middle' }, columnStyles: fcs,
             didParseCell: function (d) {
               var f = d.section === 'body' && fpos[d.row.index + ':' + d.column.index];
-              if (f) { d.cell.styles.minCellHeight = f.lines * lineH + 3; }
+              if (f) {
+                var L = d.cell.raw && d.cell.raw._nrLab, lt = L ? pdfLabTop(L.lb, fsz) : 0;
+                if (L) { d.cell.styles.cellPadding = { top: 1.2 + lt, right: 1.2, bottom: 1.2, left: 1.2 }; }
+                d.cell.styles.minCellHeight = f.lines * lineH + 3 + lt;
+              }
             },
             didDrawCell: function (d) {
               var f = d.section === 'body' && fpos[d.row.index + ':' + d.column.index];
-              if (f) { pdfField(doc, f, d.cell, fsz); }
+              if (!f) { return; }
+              var L = d.cell.raw && d.cell.raw._nrLab;
+              if (!L) { pdfField(doc, f, d.cell, fsz); return; }
+              var lt = pdfLabTop(L.lb, fsz) + 1.2;
+              pdfLabel(doc, d.cell, L, fsz, 1.2);
+              pdfField(doc, f, { x: d.cell.x, y: d.cell.y + lt - 0.6, width: d.cell.width, height: d.cell.height - lt + 0.6 }, fsz);
             } });
           gap(2);
           return;
@@ -1539,13 +1662,40 @@ window.novaReport = (function () {
             r++;
           } else if (t === 'ficha') {
             var fr = rowsOf(sec, ctx)[0] || {}, n = sec.columns || 3, c = 1;
-            (sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }).forEach(function (f, i) {
-              if (i > 0 && i % n === 0) { r++; c = 1; }
-              var lc = cellAt(r, c), vc = cellAt(r, c + 1), lt = tpl(f.label, ctx, fr);
-              lc.value = lt; lc.font = sec.labelColor ? { bold: true, color: { argb: argb(sec.labelColor) } } : { bold: true };
-              if (sec.labelFill) { lc.fill = fill(sec.labelFill); }
-              if (sec.valueColor) { vc.font = { color: { argb: argb(sec.valueColor) } }; }
-              if (sec.grid) { lc.border = vc.border = xlsBorder(sec.borderColor); lc.alignment = { vertical: 'middle', wrapText: true }; }
+            slotRows((sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }), n).forEach(function (row, ri) {
+              if (ri > 0) { r++; }
+              /* 1.16: si algún campo de la fila lleva la etiqueta arriba, la fila ocupa dos filas reales */
+              var two = row.some(function (sl) { return !sl.empty && labelOf(sl.f, sec).pos === 'top'; });
+              row.forEach(function (sl) {
+              if (sl.empty) { return; }
+              var f = sl.f; c = 1 + sl.col * 2;
+              var lb = labelOf(f, sec), last = c + sl.span * 2 - 1, lc = null, vc, lt = tpl(f.label, ctx, fr);
+              if (lb.pos === 'left') {
+                lc = cellAt(r, c); vc = cellAt(r, c + 1);
+                lc.value = labelText(lt, lb); lc.font = sec.labelColor ? { bold: true, color: { argb: argb(sec.labelColor) } } : { bold: true };
+                if (sec.labelFill) { lc.fill = fill(sec.labelFill); }
+                if (sec.valueColor) { vc.font = { color: { argb: argb(sec.valueColor) } }; }
+                if (sec.grid) { lc.border = vc.border = xlsBorder(sec.borderColor); lc.alignment = { vertical: 'middle', wrapText: true }; }
+                if (sl.span > 1 || two) {
+                  merge(r, c + 1, two ? r + 1 : r, last);
+                  if (sec.grid) { for (var mc = c + 2; mc <= last; mc++) { cellAt(r, mc).border = xlsBorder(sec.borderColor); } }
+                }
+                if (two) { merge(r, c, r + 1, c); lc.alignment = { vertical: 'middle', wrapText: true }; }
+                if (lb.styled) { xlsLab(lc, lb, false); }
+              } else {
+                var vr = lb.pos === 'top' && two ? r + 1 : r, ve = lb.pos === 'none' && two ? r + 1 : vr;
+                if (lb.pos === 'top') {
+                  lc = cellAt(r, c); lc.value = labelText(lt, lb);
+                  if (last > c) { merge(r, c, r, last); }
+                  if (sec.grid) { lc.border = xlsBorder(sec.borderColor); }
+                  var fsa = fieldStyle(f, ctx, fr);
+                  xlsLab(lc, lb, true, fsa && fsa.align);
+                }
+                vc = cellAt(vr, c);
+                if (last > c || ve > vr) { merge(vr, c, ve, last); }
+                if (sec.valueColor) { vc.font = { color: { argb: argb(sec.valueColor) } }; }
+                if (sec.grid) { vc.border = xlsBorder(sec.borderColor); }
+              }
               var raw = (/^\{[^}|]+\}$/.test(f.value || '') && !f.map) ? lookup(ctx, f.value.slice(1, -1), fr) : null;
               if (isNum(raw) && !textFmt(f.fmt)) { vc.value = raw; if (f.fmt === 'money') { vc.numFmt = '#,##0.00'; } vc.alignment = { horizontal: 'left' }; }
               else if (f.fmt === 'date' && parseDate(raw)) { vc.value = parseDate(raw); vc.numFmt = 'dd/mm/yyyy'; vc.alignment = { horizontal: 'left' }; }
@@ -1562,8 +1712,10 @@ window.novaReport = (function () {
                 if (fsy.align) { var va = {}; Object.keys(vc.alignment || {}).forEach(function (q) { va[q] = vc.alignment[q]; }); va.horizontal = fsy.align; vc.alignment = va; }
                 if (fsy.fill) { vc.fill = fill(fsy.fill); }
               }
-              setW(c, lt); setW(c + 1, fieldText(f, ctx, fr));
-              c += 2;
+              if (lb.pos === 'left') { setW(c, lt); if (sl.span === 1) { setW(c + 1, fieldText(f, ctx, fr)); } }
+              else if (sl.span === 1) { setW(c + 1, String(fieldText(f, ctx, fr)).substr(0, 40)); }
+              });
+              if (two) { r++; }
             });
             r += 2;
           } else if (t === 'tarjetas') {
@@ -1584,16 +1736,39 @@ window.novaReport = (function () {
             }
           } else if (t === 'formulario') {
             var nfx = sec.columns || 2, fc = 1, ffx = formFields(sec, ctx, suffix);
-            ffx.forEach(function (f, i) {
-              if (i > 0 && i % nfx === 0) { r++; fc = 1; }
-              formReg(f.name);
-              var lc = cellAt(r, fc), vc = cellAt(r, fc + 1);
-              lc.value = f.label; lc.font = { bold: true }; lc.alignment = { vertical: f.lines > 1 ? 'top' : 'middle' };
-              xlsxField(vc, f, listRef);
-              if (f.lines > 1) { rowH(r, 15 * f.lines); }
-              setW(fc, f.label);
-              setW(fc + 1, f.input === 'checkbox' ? '' : (f.value.length > 20 ? f.value : new Array(21).join('x')));
-              fc += 2;
+            slotRows(ffx, nfx).forEach(function (row, ri) {
+              if (ri > 0) { r++; }
+              var two = row.some(function (sl) { return !sl.empty && sl.f.lab.pos === 'top'; });
+              row.forEach(function (sl) {
+                if (sl.empty) { return; }
+                var f = sl.f, lb = f.lab; fc = 1 + sl.col * 2;
+                formReg(f.name);
+                var last = fc + sl.span * 2 - 1, wv = f.input === 'checkbox' ? '' : (f.value.length > 20 ? f.value : new Array(21).join('x'));
+                if (lb.pos === 'left') {
+                  var lc = cellAt(r, fc), vc = cellAt(r, fc + 1);
+                  lc.value = labelText(f.label, lb); lc.font = { bold: true }; lc.alignment = { vertical: f.lines > 1 ? 'top' : 'middle' };
+                  if (sl.span > 1 || two) { merge(r, fc + 1, two ? r + 1 : r, last); }
+                  if (two) { merge(r, fc, r + 1, fc); }
+                  if (lb.styled) { xlsLab(lc, lb, false); }
+                  xlsxField(vc, f, listRef);
+                  if (f.lines > 1) { rowH(two ? r + 1 : r, 15 * f.lines); }
+                  setW(fc, f.label);
+                  if (sl.span === 1) { setW(fc + 1, wv); }
+                  return;
+                }
+                /* 1.16: etiqueta arriba (fila superior) o sin etiqueta: el campo ocupa la casilla completa */
+                var vr = lb.pos === 'top' && two ? r + 1 : r, ve = lb.pos === 'none' && two ? r + 1 : vr;
+                if (lb.pos === 'top') {
+                  var tc = cellAt(r, fc); tc.value = labelText(f.label, lb);
+                  if (last > fc) { merge(r, fc, r, last); }
+                  xlsLab(tc, lb, true);
+                }
+                if (last > fc || ve > vr) { merge(vr, fc, ve, last); }
+                xlsxField(cellAt(vr, fc), f, listRef);
+                if (f.lines > 1) { rowH(ve, 15 * f.lines); }
+                if (sl.span === 1) { setW(fc + 1, wv); }
+              });
+              if (two) { r++; }
             });
             if (ffx.length) { hasFields = true; r += 2; }
           } else if (t === 'alerta') {
@@ -1843,6 +2018,13 @@ window.novaReport = (function () {
                                shading: o.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(o.fill) } : undefined });
     }
     function spacer() { return new D.Paragraph({ children: [], spacing: { before: 60, after: 60 } }); }
+    /* 1.16: etiqueta arriba (párrafo propio, sobre el valor) */
+    function labPara(text, lb, align) {
+      return new D.Paragraph({ children: [run(text, { bold: lb.bold, size: lb.size ? Math.round(lb.size * 2) : 14, color: lb.color })],
+        spacing: { before: 0, after: 20 },
+        alignment: align === 'right' ? D.AlignmentType.RIGHT : (align === 'center' ? D.AlignmentType.CENTER : D.AlignmentType.LEFT),
+        shading: lb.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(lb.fill) } : undefined });
+    }
     function imgPara(im, wmm, hmm, sec, after) {
       return new D.Paragraph({
         alignment: sec.align === 'right' ? D.AlignmentType.RIGHT : (sec.align === 'center' ? D.AlignmentType.CENTER : D.AlignmentType.LEFT),
@@ -1939,16 +2121,36 @@ window.novaReport = (function () {
           kids.push(new D.Paragraph({ children: [new D.PageBreak()] }));
         } else if (t === 'ficha') {
           var fr = rowsOf(sec, ctx)[0] || {}, n = sec.columns || 3, trs = [], cur = [];
-          (sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }).forEach(function (f) {
-            var gd = !!sec.grid, pv = gd ? 60 : undefined;
-            cur.push(cell(tpl(f.label, ctx, fr), { bold: true, size: 17, fill: sec.labelFill, color: sec.labelColor, pad: pv, middle: gd }),
+          slotRows((sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }), n).forEach(function (row) {
+           row.forEach(function (sl) {
+            var f = sl.f, gd = !!sec.grid, pv = gd ? 60 : undefined;
+            if (sl.empty) {
+              var nb0 = { style: D.BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+              cur.push(new D.TableCell({ children: [new D.Paragraph({ children: [] })], columnSpan: sl.span * 2,
+                                         borders: gd ? { top: nb0, bottom: nb0, left: nb0, right: nb0 } : undefined }));
+              return;
+            }
+            var lb = labelOf(f, sec), lt = tpl(f.label, ctx, fr);
+            if (lb.pos !== 'left') {    /* 1.16: una sola celda con la etiqueta arriba, o sin etiqueta */
+              var fs1 = fieldStyle(f, ctx, fr), ch = [], pv1 = gd ? 60 : 30;
+              if (lb.pos === 'top') { ch.push(labPara(labelText(lt, lb), lb, lb.align || (fs1 && fs1.align) || 'left')); }
+              ch.push(para(fieldText(f, ctx, fr), { size: 17, color: (fs1 && fs1.color) || sec.valueColor, bold: fs1 ? fs1.bold : undefined, align: fs1 ? fs1.align : undefined }));
+              cur.push(new D.TableCell({ children: ch, columnSpan: sl.span * 2, margins: { top: pv1, bottom: pv1, left: 60, right: 60 },
+                                         verticalAlign: gd ? D.VerticalAlign.CENTER : undefined,
+                                         shading: fs1 && fs1.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(fs1.fill) } : undefined }));
+              return;
+            }
+            cur.push(cell(labelText(lt, lb), lb.styled ? { bold: lb.bold, size: lb.size ? Math.round(lb.size * 2) : 17, fill: lb.fill, color: lb.color, align: lb.align, pad: pv, middle: gd }
+                                                    : { bold: true, size: 17, fill: sec.labelFill, color: sec.labelColor, pad: pv, middle: gd }),
                      (function (fs) {
                        return cell(fieldText(f, ctx, fr), { size: 17, color: (fs && fs.color) || sec.valueColor, pad: pv, middle: gd,
-                                                            bold: fs ? fs.bold : undefined, align: fs ? fs.align : undefined, fill: fs ? fs.fill : undefined });
+                                                            bold: fs ? fs.bold : undefined, align: fs ? fs.align : undefined, fill: fs ? fs.fill : undefined,
+                                                            span: sl.span > 1 ? sl.span * 2 - 1 : undefined });
                      })(fieldStyle(f, ctx, fr)));
-            if (cur.length === n * 2) { trs.push(new D.TableRow({ children: cur })); cur = []; }
+           });
+           for (var pu = slotUsed(row) * 2; pu < n * 2; pu++) { cur.push(cell('')); }
+           trs.push(new D.TableRow({ children: cur })); cur = [];
           });
-          if (cur.length) { while (cur.length < n * 2) { cur.push(cell('')); } trs.push(new D.TableRow({ children: cur })); }
           if (trs.length) {
             var cw = [];
             if (sec.grid || Array.isArray(sec.labelWidths)) {
@@ -1997,22 +2199,42 @@ window.novaReport = (function () {
               height: flines > 1 ? { value: Math.round(230 * flines + 120), rule: D.HeightRule.ATLEAST } : undefined }));
             fcells = []; flines = 1;
           };
-          ffd.forEach(function (f) {
+          slotRows(ffd, nfd).forEach(function (row) {
+           row.forEach(function (sl) {
+            var f = sl.f;
+            if (sl.empty) { fcells.push(new D.TableCell({ children: [new D.Paragraph({ children: [] })], columnSpan: sl.span * 2 })); return; }
             formReg(f.name);
             var idx = fields.length;
             fields.push(f);
             flines = Math.max(flines, f.lines);
-            var va = f.lines > 1 ? D.VerticalAlign.TOP : D.VerticalAlign.CENTER;
-            fcells.push(new D.TableCell({ children: [para(f.label, { bold: true, size: 17 })], verticalAlign: va,
+            var va = f.lines > 1 ? D.VerticalAlign.TOP : D.VerticalAlign.CENTER, lb = f.lab;
+            if (lb.pos !== 'left') {    /* 1.16: etiqueta arriba o sin etiqueta: el control va en una caja que ocupa la casilla */
+              var box = new D.Table({ width: { size: 100, type: D.WidthType.PERCENTAGE }, borders: noB, rows: [new D.TableRow({
+                height: f.lines > 1 ? { value: Math.round(230 * f.lines + 60), rule: D.HeightRule.ATLEAST } : undefined,
+                children: [new D.TableCell({ children: [new D.Paragraph({ children: [run(FORM_MARK + idx + FORM_END, { size: 17 })], spacing: { before: 0, after: 0 } })],
+                                             verticalAlign: va, margins: { top: 40, bottom: 40, left: 60, right: 60 },
+                                             borders: { top: fb, bottom: fb, left: fb, right: fb },
+                                             shading: { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(FORM_FILL) } })] })] });
+              var ch2 = lb.pos === 'top' ? [labPara(labelText(f.label, lb), lb, lb.align || 'left')] : [];
+              ch2.push(box, new D.Paragraph({ children: [], spacing: { before: 0, after: 0, line: 120, lineRule: D.LineRuleType.EXACT } }));
+              fcells.push(new D.TableCell({ children: ch2, columnSpan: sl.span * 2, verticalAlign: D.VerticalAlign.TOP,
+                                            margins: { top: 30, bottom: 30, left: 60, right: 60 } }));
+              return;
+            }
+            fcells.push(new D.TableCell({ children: [lb.styled ? para(labelText(f.label, lb), { bold: lb.bold, size: lb.size ? Math.round(lb.size * 2) : 17, color: lb.color, align: lb.align })
+                                                               : para(f.label, { bold: true, size: 17 })], verticalAlign: va,
+                                          shading: lb.styled && lb.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(lb.fill) } : undefined,
                                           margins: { top: 30, bottom: 30, left: 60, right: 60 } }),
                         /* Marcador que se reemplaza por un control de contenido (w:sdt) al final */
                         new D.TableCell({ children: [new D.Paragraph({ children: [run(FORM_MARK + idx + FORM_END, { size: 17 })], spacing: { before: 0, after: 0 } })],
+                                          columnSpan: sl.span > 1 ? sl.span * 2 - 1 : undefined,
                                           verticalAlign: va, margins: { top: 40, bottom: 40, left: 60, right: 60 },
                                           borders: { top: fb, bottom: fb, left: fb, right: fb },
                                           shading: { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(FORM_FILL) } }));
-            if (fcells.length === nfd * 2) { frow(); }
+           });
+           for (var pu = slotUsed(row) * 2; pu < nfd * 2; pu++) { fcells.push(cell('')); }
+           frow();
           });
-          if (fcells.length) { while (fcells.length < nfd * 2) { fcells.push(cell('')); } frow(); }
           if (ftrs.length) {
             var fcw = [], lw = Math.round((sec.labelWidth || 32) * 56.7), vw = Math.max(600, Math.round((usable - lw * nfd) / nfd));
             if (lw * nfd + 600 * nfd > usable) { lw = vw = Math.round(usable / (nfd * 2)); }
@@ -2412,15 +2634,17 @@ window.novaReport = (function () {
     var sp = (window.apex && apex.util) ? apex.util.showSpinner() : null;
     /* Origen "resolver": el diseño y las fuentes los decide el servidor a partir de o.report + o.params */
     var resolver = o.origin === 'resolver' && !o.data;
+    /* Origen "query" (1.17): el diseño puede venir de la consulta del reporte; si no, del atributo */
+    var query = o.origin === 'query' && !o.data;
     var layout;
-    if (!resolver) {
+    if (!resolver && !query) {
       try { layout = parseLayout(o.layout); } catch (e) { if (sp) { sp.remove(); } if (w) { w.close(); } alertMsg('Diseño inválido: ' + e.message); return Promise.reject(e); }
     }
     var opt = { layout: layout, format: o.format, output: o.output, params: o.params || {}, templateUrl: o.templateUrl, hooks: o.hooks || {},
                 formPassword: o.formPassword };
     fire('start', { format: o.format, output: o.output, report: resolver ? o.report : undefined });
     var needZip = o.output !== 'merge';
-    var libs = ensure(libsFor(formats, needZip).concat(resolver ? [] : layoutLibs(layout)));
+    var libs = ensure(libsFor(formats, needZip).concat(resolver || query ? [] : layoutLibs(layout)));
     var req = o.data ? Promise.resolve({ data: o.data }) : new Promise(function (resolve, reject) {
       var q = { x01: JSON.stringify(opt.params), x02: o.output === 'zip' ? 'Y' : 'N', pageItems: itemsOf(o.items) };
       if (resolver) {
@@ -2438,6 +2662,13 @@ window.novaReport = (function () {
         try { layout = parseLayout(r.layout); } catch (e) { throw new Error('Diseño inválido: ' + e.message); }
         opt.layout = layout;
         if (r.params) { opt.params = r.params; }
+        if (r.templateUrl) { opt.templateUrl = r.templateUrl; }
+        more = ensure(layoutLibs(layout));
+      } else if (query) {
+        var lv = r.layout || o.layout;
+        if (!lv) { throw new Error('Falta el diseño: la consulta del reporte no devolvió LAYOUT y el atributo Diseño está vacío.'); }
+        try { layout = parseLayout(lv); } catch (e) { throw new Error('Diseño inválido: ' + e.message); }
+        opt.layout = layout;
         if (r.templateUrl) { opt.templateUrl = r.templateUrl; }
         more = ensure(layoutLibs(layout));
       }

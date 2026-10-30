@@ -38,7 +38,7 @@ sub1(r"p_default_owner=>'[^']*'", "p_default_owner=>'" + owner + "'")
 sub1(r"\n,p_apexlang_name=>'[^']*'", "")
 sub1(r"\n,p_static_id=>'[^']*'", "")
 # secuencia de cada atributo (static_id del export 26.1)
-SEQ = {'sources': 1, 'layout': 2, 'format': 3, 'output': 4, 'items': 5, 'pdf_action': 6,
+SEQ = {'sources': 1, 'layout': 2, 'format': 3, 'output': 4, 'items': 5, 'pdf_action': 6, 'report_query': 11,
        'template_url': 7, 'message': 8, 'origin': 9, 'resolver': 10}
 # render v1
 RENDER = """'function render(p_dynamic_action in apex_plugin.t_dynamic_action,',
@@ -73,8 +73,8 @@ def att(m):
 sub1(r"p_dynamic_action\.attributes\.get_varchar2\(''([a-z_]+)''\)", att)
 if ref:
     old, new = idmap(open(ref, encoding='utf-8').read()), idmap(s)
-    assert set(old) == set(new), set(old) ^ set(new)
-    tr = {new[k]: old[k] for k in new}
+    assert set(old) <= set(new), set(old) - set(new)
+    tr = {new[k]: old[k] for k in new if k in old}   # componentes nuevos conservan su ID del export 26.1
     s = re.sub(r"wwv_flow_imp\.id\((\d+)\)", lambda m: "wwv_flow_imp.id(%s)" % tr.get(m.group(1), m.group(1)), s)
     s = re.sub(r"(--     PLUGIN: )(\d+)", lambda m: m.group(1) + tr.get(m.group(2), m.group(2)), s)
 s = re.sub(r"prompt APPLICATION \d+ - .*", "prompt APPLICATION " + app, s)

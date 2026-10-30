@@ -38,8 +38,95 @@ begin
     return json_object_t.parse(l_res);
 end nr_resolve;
 
+-- Origen "Consulta" (1.17): una consulta devuelve UNA fila con el diseño y/o las fuentes SQL, desde la tabla que sea.
+-- Columnas reconocidas por su alias: LAYOUT (JSON), SOURCES (fuentes "--@X ..."), TEMPLATE_URL.
+-- Binds: ítems de APEX (automático) y data-* del elemento, como en las fuentes SQL.
+procedure nr_query(p_sql in varchar2, p_params in clob,
+                   p_layout out clob, p_sources out clob, p_tpl out varchar2) is
+    l_sql   varchar2(32767) := regexp_replace(rtrim(trim(p_sql), ' ' || chr(9) || chr(10) || chr(13)), '[;/]+$', '');
+    l_vals  apex_json.t_values;
+    l_parms apex_exec.t_parameters;
+    l_ctx   apex_exec.t_context;
+    l_scan  varchar2(32767);
+    l_bind  varchar2(128);
+    l_seen  varchar2(4000) := ',';
+    l_name  varchar2(128);
+    l_found boolean := false;
+    l_known boolean := false;
+    l_chk   json_object_t;
+    function val(c in pls_integer) return clob is
+    begin
+        if apex_exec.get_column(l_ctx, c).data_type = apex_exec.c_data_type_clob then
+            return apex_exec.get_clob(l_ctx, c);
+        end if;
+        return apex_exec.get_varchar2(l_ctx, c);
+    end val;
+begin
+    if l_sql is null then
+        raise_application_error(-20007, 'Configure la consulta del reporte (origen Consulta).');
+    end if;
+    if p_params is not null then
+        apex_json.parse(l_vals, p_params);
+    end if;
+    l_scan := regexp_replace(l_sql, '''[^'']*''', ' ');
+    l_scan := regexp_replace(l_scan, '--[^' || chr(10) || ']*', ' ');
+    for b in 1 .. regexp_count(l_scan, ':[A-Za-z][A-Za-z0-9_$#]*') loop
+        l_bind := upper(substr(regexp_substr(l_scan, ':[A-Za-z][A-Za-z0-9_$#]*', 1, b), 2));
+        if instr(l_seen, ',' || l_bind || ',') = 0 then
+            l_seen := l_seen || l_bind || ',';
+            if not nr_is_item(l_bind) then
+                apex_exec.add_parameter(l_parms, l_bind,
+                    case when p_params is not null then apex_json.get_varchar2(p_path => l_bind, p_values => l_vals) end);
+            end if;
+        end if;
+    end loop;
+    l_ctx := apex_exec.open_query_context(
+                 p_location        => apex_exec.c_location_local_db,
+                 p_sql_query       => l_sql,
+                 p_sql_parameters  => l_parms,
+                 p_auto_bind_items => true);
+    while apex_exec.next_row(l_ctx) loop
+        if l_found then
+            raise_application_error(-20008, 'La consulta del reporte devolvió más de una fila.');
+        end if;
+        l_found := true;
+        for c in 1 .. apex_exec.get_column_count(l_ctx) loop
+            l_name := upper(apex_exec.get_column(l_ctx, c).name);
+            if l_name = 'LAYOUT' then
+                p_layout := val(c); l_known := true;
+            elsif l_name = 'SOURCES' then
+                p_sources := val(c); l_known := true;
+            elsif l_name = 'TEMPLATE_URL' then
+                p_tpl := dbms_lob.substr(val(c), 4000, 1); l_known := true;
+            end if;
+        end loop;
+    end loop;
+    apex_exec.close(l_ctx);
+    l_ctx := null;
+    if not l_found then
+        raise_application_error(-20009, 'La consulta del reporte no devolvió filas.');
+    end if;
+    if not l_known then
+        raise_application_error(-20010, 'La consulta del reporte debe devolver las columnas LAYOUT y/o SOURCES.');
+    end if;
+    if p_layout is not null and dbms_lob.getlength(p_layout) > 0 then
+        begin
+            l_chk := json_object_t.parse(p_layout);
+        exception
+            when others then
+                raise_application_error(-20011, 'La columna LAYOUT no es un JSON válido: ' || regexp_replace(sqlerrm, '^ORA-\d+: ', ''));
+        end;
+    end if;
+exception
+    when others then
+        if l_ctx is not null then
+            apex_exec.close(l_ctx);
+        end if;
+        raise;
+end nr_query;
+
 procedure nr_write_json(p_sources in clob, p_params in varchar2, p_summary in boolean,
-                        p_res in json_object_t default null) is
+                        p_res in json_object_t default null, p_layout in clob default null, p_tpl in varchar2 default null) is
     type t_src is record (name varchar2(128), flags varchar2(400), sql_text varchar2(32767));
     type t_srcs is table of t_src index by pls_integer;
     l_srcs   t_srcs;
@@ -195,6 +282,12 @@ begin
             end loop;
         end if;
         apex_json.close_object;
+    elsif p_layout is not null and dbms_lob.getlength(p_layout) > 0 then
+        -- Origen "Consulta": el diseño leído de la tabla (las fuentes SQL tampoco viajan al navegador)
+        apex_json.write('layout', p_layout);
+    end if;
+    if p_res is null and p_tpl is not null then
+        apex_json.write('templateUrl', p_tpl);
     end if;
     apex_json.close_object;
 exception
@@ -238,6 +331,9 @@ function ajax(p_dynamic_action in apex_plugin.t_dynamic_action,
     l_r   apex_plugin.t_dynamic_action_ajax_result;
     l_out clob;
     l_res json_object_t;
+    l_lay clob;
+    l_src clob;
+    l_tpl varchar2(4000);
 begin
     begin
         if nvl(p_dynamic_action.attributes.get_varchar2('origin'), 'attributes') = 'resolver' then
@@ -250,6 +346,20 @@ begin
                           p_params  => null,
                           p_summary => apex_application.g_x02 = 'Y',
                           p_res     => l_res);
+        elsif p_dynamic_action.attributes.get_varchar2('origin') = 'query' then
+            -- Diseño y/o fuentes desde una consulta; lo que no devuelva se toma de los atributos
+            nr_query(p_sql     => p_dynamic_action.attributes.get_varchar2('report_query'),
+                     p_params  => apex_application.g_x01,
+                     p_layout  => l_lay,
+                     p_sources => l_src,
+                     p_tpl     => l_tpl);
+            apex_json.initialize_clob_output;
+            nr_write_json(p_sources => case when l_src is not null and dbms_lob.getlength(l_src) > 0 then l_src
+                                            else to_clob(p_dynamic_action.attributes.get_varchar2('sources')) end,
+                          p_params  => apex_application.g_x01,
+                          p_summary => apex_application.g_x02 = 'Y',
+                          p_layout  => l_lay,
+                          p_tpl     => l_tpl);
         else
             apex_json.initialize_clob_output;
             nr_write_json(p_sources => p_dynamic_action.attributes.get_varchar2('sources'),

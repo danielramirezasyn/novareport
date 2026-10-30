@@ -1,6 +1,6 @@
 # novaReport — PDF, Excel and Word for Oracle APEX
 
-[![Version](https://img.shields.io/badge/version-1.14.0-1F4E79)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.17.0-1F4E79)](CHANGELOG.md)
 [![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requirements)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -160,7 +160,9 @@ select h.empno doc_key, h.change_date, h.position from history h
 | Attribute (Spanish label) | Purpose |
 |---|---|
 | **Fuentes SQL** | The queries (`--@NAME`). |
-| **Diseño (JSON)** | The layout, or the name of a global JS variable if it exceeds 4000 characters (`myLayouts.letter`). |
+| **Diseño (JSON)** | The layout, or the name of a global JS variable (`myLayouts.letter`). |
+| **Origen** | `Atributos` (default), `Consulta` (layout and/or SQL from a table) or `Resolver` (PL/SQL function). |
+| **Consulta del reporte** | With origin `Consulta`: `select layout, sql_text as sources from my_reports where code = :P5_REPORT`. No 4000-character limit ([docs/API.md §3.2](docs/API.md#32-origen-consulta)). |
 | **Formato** | `pdf`, `xlsx`, `docx`, `docx-template`, `all`. |
 | **Salida** | `file`, `zip`, `merge`. |
 | **Ítems a enviar** | Items saved to session state before querying ([see note](#known-issues-and-limitations)). |
@@ -189,9 +191,9 @@ select h.empno doc_key, h.change_date, h.position from history h
 |---|---|---|
 | `header` | Colored title band | `title`, `subtitle`, `right`, `size`, `subtitleSize`, `rightSize`, `font`, `fill`, `color` |
 | `tarjetas` | Summary tiles: small label + highlighted value | `source`, `fields[{label, value, fmt, map, when, color}]`, `columns`, `fill`, `accent`, `labelColor`, `valueColor`, `size` |
-| `ficha` | Label / value pairs | `source`, `columns`, `fields[{label, value, fmt, map, when, align, bold, color, fill}]`, `grid`, `labelWidths`, `labelFill`, `labelColor`, `valueColor` |
+| `ficha` | Label / value pairs | `source`, `columns`, `fields[{label, value, fmt, map, when, align, bold, color, fill, span, labelPosition, labelSize, labelColor, labelFill, labelBold, labelCase, labelAlign}]` (`{empty: true}` = gap), `grid`, `labelWidths`, `labelFill`, `labelColor`, `valueColor`, `labelPosition` (`left`, `top`, `none`) |
 | `tabla` | Table | `source`, `columns[{col, label, fmt, align, bold, color, width, map, value, cellStyle, when}]`, `totals` (`sum`/`avg`/`min`/`max`/`count`), `breakBy`, `rowStyle`, `groups`, `filter`, `title`, `emptyText`, `headAlign`, `grid`, `totalsColor` |
-| `formulario` | Fillable fields | `fields[{name, label, input (text/multiline/list/checkbox), value, options, optionsFrom, maxLength, lines, readOnly}]`, `columns`; `form.protect` / `form.password` |
+| `formulario` | Fillable fields | `fields[{name, label, input (text/multiline/list/checkbox), value, options, optionsFrom, maxLength, lines, readOnly, span}]` (`{empty: true}` = gap), `columns`; `form.protect` / `form.password` |
 | `alerta` | Colored banner when a condition holds | `source`, `when`, `each`, `text`, `color` |
 | `texto` | Rich-text paragraphs | `text`, `align`, `size`, `lineHeight`, `font`, `color`, `x`/`y` (PDF) |
 | `imagen` | PNG/JPG from URL or BLOB | `url` or `field`, `width`, `height`, `align`, `x`/`y` (PDF) |

@@ -1,5 +1,22 @@
 # Cambios
 
+## 1.17.0
+- Origen **Consulta** (`query`): el diseño y/o las fuentes SQL se leen de una tabla propia con una consulta que devuelve una fila (`LAYOUT`, `SOURCES` y opcional `TEMPLATE_URL`). Quita el límite de 4000 caracteres de los atributos sin depender de una función resolver ni del Designer. Lo que la consulta no devuelva se toma de los atributos.
+- Atributo nuevo **Consulta del reporte**. Con este origen, **Fuentes SQL** y **Diseño (JSON)** pasan a ser opcionales.
+- La consulta admite ítems de APEX y binds desde `data-*`, igual que las fuentes. Errores claros: sin filas, varias filas, columnas faltantes o `LAYOUT` que no es JSON.
+- Sin cambios para acciones existentes: los orígenes Atributos y Resolver funcionan igual (los archivos de prueba salen idénticos a 1.16.0).
+
+## 1.16.0
+- `ficha` y `formulario`: **`labelPosition`** (`left`, `top`, `none`) en la sección y **por campo**. `top` pone la etiqueta sobre el valor en la misma casilla (estilo formulario bancario); `none` deja el valor solo. Se combina con `span` y huecos, y una misma fila puede mezclar posiciones.
+- Estilo de etiqueta en la sección y por campo: `labelSize`, `labelColor`, `labelFill`, `labelBold`, `labelCase` (`upper`) y `labelAlign`.
+- PDF: etiqueta dibujada sobre la celda y el valor o el campo AcroForm debajo. Excel: las filas con etiquetas arriba usan dos filas reales; los nombres definidos del formulario apuntan al valor. Word: dos párrafos por celda; en formulario, el control de contenido va en una caja bajo la etiqueta.
+- Sin cambios para diseños existentes: todas las propiedades nuevas son opcionales (los archivos de prueba salen idénticos a 1.15.0).
+
+## 1.15.0
+- `ficha` y `formulario`: **huecos** (`{ "empty": true }`) y campos **anchos** con `span` (`2`, `3`… o `"row"` para el resto de la fila). Un campo que no cabe en lo que queda de la fila empieza una nueva. PDF, Excel (celdas combinadas) y Word (`gridSpan`).
+- Con huecos o `span`, en PDF las columnas de valor toman el mismo ancho.
+- Sin cambios para diseños existentes (los archivos de prueba salen idénticos a 1.14.0).
+
 ## 1.14.0
 - `header`: **`subtitleSize`** y **`rightSize`** (tamaño del subtítulo y del texto derecho), **`font`** (`helvetica`, `times`, `courier`), **`fill`** y **`color`** (fondo y texto sin depender del tema) y `height` (alto mínimo, PDF). En PDF la banda crece con títulos grandes; `size` ahora también aplica en Excel y Word.
 - `ficha`: estilo **por campo** con `align` (`left`, `center`, `right`), `bold`, `color` (fijo o según una columna) y `fill`. PDF, Excel y Word.
