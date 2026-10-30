@@ -1,0 +1,14 @@
+{
+  "_params": { "FIRMAS": "S" },
+  "DOCS": [
+    { "DOC_KEY": 1, "NUMERO": "FAC-000123", "FECHA": "24/10/2026", "CLIENTE": "Ana Pérez", "CEDULA": "8-765-4321",
+      "DIRECCION": "Calle 50, Panamá", "SUBTOTAL": 1284, "ITBMS": 89.88, "TOTAL": 1373.88 }
+  ],
+  "ITEMS": [
+    { "DOC_KEY": 1, "DESCRIPCION": "Consultoría Oracle APEX", "CANTIDAD": 8, "PRECIO": 120, "IMPORTE": 960 },
+    { "DOC_KEY": 1, "DESCRIPCION": "Licencia novaReport (soporte anual)", "CANTIDAD": 1, "PRECIO": 324, "IMPORTE": 324 }
+  ],
+  "EMPRESA": [
+    { "NOMBRE": "NovaCode, S.A.", "RUC": "155771259-2-2025", "DIRECCION": "Panamá Oeste, Arraiján" }
+  ]
+}

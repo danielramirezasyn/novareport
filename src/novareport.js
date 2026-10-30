@@ -1,5 +1,5 @@
 /*!
- * novaReport 1.13.0 - Reportes PDF / Excel / Word para Oracle APEX
+ * novaReport 1.14.0 - Reportes PDF / Excel / Word para Oracle APEX
  * https://github.com/danielramirezasyn/novareport - Licencia MIT
  * NovaCode - plugin de Acción Dinámica COM.NOVACODE.NOVAREPORT
  *
@@ -10,7 +10,7 @@
 window.novaReport = (function () {
   'use strict';
 
-  var VERSION = '1.13.0';
+  var VERSION = '1.14.0';
 
   /* ------------------------------------------------------------------ librerías */
   var LIBS = {
@@ -542,6 +542,17 @@ window.novaReport = (function () {
   function labelW(sec, i) { var a = sec.labelWidths; return (Array.isArray(a) && Number(a[i]) > 0) ? Number(a[i]) : (sec.labelWidth || 32); }
   /* Alineación del encabezado de una columna: columna > tabla > centro; "auto" = la de los datos */
   function headAlignOf(c, sec) { var a = c.headAlign || sec.headAlign || 'center'; return a === 'auto' ? c.align : a; }
+  /* ---------- Estilo por campo de ficha (1.14): align, bold, color (fijo o según columna), fill */
+  function fieldStyle(f, ctx, row) {
+    if (!f || !(f.align || f.bold || f.color || f.fill)) { return null; }
+    var al = /^(left|center|right)$/.test(f.align || '') ? f.align : null;
+    return { align: al, bold: !!f.bold, color: f.color ? colorOf(f.color, ctx, row) : null, fill: f.fill || null };
+  }
+  /* ---------- Encabezado (1.14): tamaños, letra y colores propios */
+  function headerOf(sec, th) {
+    return { size: sec.size || 14, subSize: sec.subtitleSize || 9, rightSize: sec.rightSize || 9,
+             font: FONTS[fontKey(sec.font)], fill: sec.fill || th.primary, color: sec.color || th.headText };
+  }
   /* ---------- Tarjetas (1.13): etiqueta pequeña + valor destacado, con barra de acento a la izquierda */
   function cardsOf(sec, ctx, th) {
     var fr = rowsOf(sec, ctx)[0] || {};
@@ -1002,14 +1013,17 @@ window.novaReport = (function () {
       sectionsFor(layout, 'pdf', ctx).forEach(function drawSec(sec) {
         var t = sec.type;
         if (t === 'header') {
-          var hh = sec.subtitle ? 20 : 16;
-          doc.setFillColor(P[0], P[1], P[2]); doc.rect(0, 0, W, hh, 'F');
-          doc.setTextColor(HT[0], HT[1], HT[2]);
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(sec.size || 14);
-          doc.text(tpl(sec.title, ctx), M, 10.5, { maxWidth: W * 0.7 });
-          doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-          if (sec.right) { doc.text(tpl(sec.right, ctx), W - M, 10.5, { align: 'right' }); }
-          if (sec.subtitle) { doc.text(tpl(sec.subtitle, ctx), M, 16.5); }
+          var hd = headerOf(sec, th), hF = sec.fill ? hexRgb(hd.fill) : P, hC = sec.color ? hexRgb(hd.color) : HT;
+          var htb = Math.max(10.5, 3.5 + hd.size * 0.3528), hsb = htb + Math.max(6, 1.5 + hd.subSize * 0.3528 * 1.1);
+          var hh = Math.max(Number(sec.height) || 0, sec.subtitle ? Math.max(20, hsb + 3.5) : Math.max(16, htb + 5.5));
+          doc.setFillColor(hF[0], hF[1], hF[2]); doc.rect(0, 0, W, hh, 'F');
+          doc.setTextColor(hC[0], hC[1], hC[2]);
+          doc.setFont(hd.font[0], 'bold'); doc.setFontSize(hd.size);
+          doc.text(tpl(sec.title, ctx), M, htb, { maxWidth: W * 0.7 });
+          doc.setFont(hd.font[0], 'normal'); doc.setFontSize(hd.rightSize);
+          if (sec.right) { doc.text(tpl(sec.right, ctx), W - M, htb, { align: 'right' }); }
+          if (sec.subtitle) { doc.setFontSize(hd.subSize); doc.text(tpl(sec.subtitle, ctx), M, hsb); }
+          doc.setFont('helvetica', 'normal');
           doc.setTextColor(0, 0, 0);
           y = hh + 4; doc.lastAutoTable = null;
           return;
@@ -1158,7 +1172,16 @@ window.novaReport = (function () {
         if (t === 'ficha') {
           var fr = rowsOf(sec, ctx)[0] || {}, n = sec.columns || 3, body = [], cur = [], cs = {};
           (sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }).forEach(function (f) {
-            cur.push(tpl(f.label, ctx, fr), fieldText(f, ctx, fr));
+            var fst0 = fieldStyle(f, ctx, fr), fv0 = fieldText(f, ctx, fr);
+            if (fst0) {
+              var fsx = {};
+              if (fst0.align) { fsx.halign = fst0.align; }
+              if (fst0.bold) { fsx.fontStyle = 'bold'; }
+              if (fst0.color) { fsx.textColor = hexRgb(fst0.color); }
+              if (fst0.fill) { fsx.fillColor = hexRgb(fst0.fill); }
+              fv0 = { content: fv0, styles: fsx };
+            }
+            cur.push(tpl(f.label, ctx, fr), fv0);
             if (cur.length === n * 2) { body.push(cur); cur = []; }
           });
           if (cur.length) { while (cur.length < n * 2) { cur.push(''); } body.push(cur); }
@@ -1478,10 +1501,12 @@ window.novaReport = (function () {
             return;
           }
           if (t === 'header') {
-            band(tpl(sec.title, ctx), fillP, { bold: true, size: 14, color: { argb: argb(th.headText) } }, 26);
+            var hx = headerOf(sec, th), hxf = sec.fill ? fill(hx.fill) : fillP, hxc = { argb: argb(hx.color) };
+            var hxt = { bold: true, size: hx.size, color: hxc }, hxs = { size: sec.subtitle ? hx.subSize : hx.rightSize, color: hxc };
+            if (sec.font) { hxt.name = hxs.name = hx.font[1]; }
+            band(tpl(sec.title, ctx), hxf, hxt, Math.max(26, Math.round(hx.size * 1.8)));
             if (sec.right || sec.subtitle) {
-              band([tpl(sec.subtitle, ctx), tpl(sec.right, ctx)].filter(Boolean).join('   |   '), fillP,
-                   { size: 9, color: { argb: argb(th.headText) } }, 16);
+              band([tpl(sec.subtitle, ctx), tpl(sec.right, ctx)].filter(Boolean).join('   |   '), hxf, hxs, Math.max(16, Math.round(hxs.size * 1.8)));
             }
             r++;
           } else if (t === 'texto') {
@@ -1526,6 +1551,17 @@ window.novaReport = (function () {
               else if (f.fmt === 'date' && parseDate(raw)) { vc.value = parseDate(raw); vc.numFmt = 'dd/mm/yyyy'; vc.alignment = { horizontal: 'left' }; }
               else { vc.value = fieldText(f, ctx, fr); }
               if (sec.grid) { vc.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }; }
+              var fsy = fieldStyle(f, ctx, fr);
+              if (fsy) {
+                if (fsy.bold || fsy.color) {
+                  var vf = {}; Object.keys(vc.font || {}).forEach(function (q) { vf[q] = vc.font[q]; });
+                  if (fsy.bold) { vf.bold = true; }
+                  if (fsy.color) { vf.color = { argb: argb(fsy.color) }; }
+                  vc.font = vf;
+                }
+                if (fsy.align) { var va = {}; Object.keys(vc.alignment || {}).forEach(function (q) { va[q] = vc.alignment[q]; }); va.horizontal = fsy.align; vc.alignment = va; }
+                if (fsy.fill) { vc.fill = fill(fsy.fill); }
+              }
               setW(c, lt); setW(c + 1, fieldText(f, ctx, fr));
               c += 2;
             });
@@ -1792,7 +1828,7 @@ window.novaReport = (function () {
     function run(text, o) {
       o = o || {};
       return new D.TextRun({ text: String(text === null || text === undefined ? '' : text), bold: !!o.bold, italics: !!o.italic,
-                             size: o.size || szT, color: o.color ? hexNo(o.color) : undefined, font: 'Calibri' });
+                             size: o.size || szT, color: o.color ? hexNo(o.color) : undefined, font: o.font || 'Calibri' });
     }
     function para(text, o) {
       o = o || {};
@@ -1851,11 +1887,12 @@ window.novaReport = (function () {
           return;
         }
         if (t === 'header') {
+          var hw = headerOf(sec, th), hwf = sec.font ? hw.font[1] : undefined;
           var rowsH = [new D.TableRow({ children: [
-            cell(tpl(sec.title, ctx), { bold: true, size: 28, color: th.headText, fill: th.primary }),
-            cell(tpl(sec.right, ctx), { size: 18, color: th.headText, fill: th.primary, align: 'right' }) ] })];
+            cell(tpl(sec.title, ctx), { bold: true, size: Math.round(hw.size * 2), color: hw.color, fill: hw.fill, font: hwf }),
+            cell(tpl(sec.right, ctx), { size: Math.round(hw.rightSize * 2), color: hw.color, fill: hw.fill, align: 'right', font: hwf, middle: !!sec.rightSize }) ] })];
           if (sec.subtitle) {
-            rowsH.push(new D.TableRow({ children: [cell(tpl(sec.subtitle, ctx), { size: 18, color: th.headText, fill: th.primary, span: 2 })] }));
+            rowsH.push(new D.TableRow({ children: [cell(tpl(sec.subtitle, ctx), { size: Math.round(hw.subSize * 2), color: hw.color, fill: hw.fill, span: 2, font: hwf })] }));
           }
           kids.push(new D.Table({ rows: rowsH, width: { size: usable, type: D.WidthType.DXA }, columnWidths: [Math.round(usable * 0.7), Math.round(usable * 0.3)], borders: noB }), spacer());
         } else if (t === 'texto') {
@@ -1905,7 +1942,10 @@ window.novaReport = (function () {
           (sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }).forEach(function (f) {
             var gd = !!sec.grid, pv = gd ? 60 : undefined;
             cur.push(cell(tpl(f.label, ctx, fr), { bold: true, size: 17, fill: sec.labelFill, color: sec.labelColor, pad: pv, middle: gd }),
-                     cell(fieldText(f, ctx, fr), { size: 17, color: sec.valueColor, pad: pv, middle: gd }));
+                     (function (fs) {
+                       return cell(fieldText(f, ctx, fr), { size: 17, color: (fs && fs.color) || sec.valueColor, pad: pv, middle: gd,
+                                                            bold: fs ? fs.bold : undefined, align: fs ? fs.align : undefined, fill: fs ? fs.fill : undefined });
+                     })(fieldStyle(f, ctx, fr)));
             if (cur.length === n * 2) { trs.push(new D.TableRow({ children: cur })); cur = []; }
           });
           if (cur.length) { while (cur.length < n * 2) { cur.push(cell('')); } trs.push(new D.TableRow({ children: cur })); }

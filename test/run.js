@@ -208,4 +208,34 @@ fs.mkdirSync(OUT, { recursive: true });
       console.log('OK  ', 'columnas__' + format + '__' + r.name);
     }
   }
+  /* 1.14: encabezado con tamaños, letra y colores propios + estilo por campo de ficha */
+  {
+    const layout = { fileName: 'estilos-114', sections: [
+      { type: 'header', title: 'Estado de cuenta', subtitle: 'Sub {DEPTOS.DNAME}', right: 'Derecha', size: 24, subtitleSize: 12, rightSize: 11,
+        font: 'times', fill: '#14403F', color: '#F5F0E1' },
+      { type: 'ficha', source: 'DEPTOS', columns: 2, fields: [
+        { label: 'Depto', value: '{DNAME}', bold: true },
+        { label: 'Salarios', value: '{SALARIOS}', fmt: 'money', align: 'right', color: '#1B7A3D' },
+        { label: 'Sede', value: '{LOC}', align: 'center', fill: '#FDECEC', color: { by: 'LOC', values: { 'NEW YORK': '#A61B1B' } } } ] }] };
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const r = await window.novaReport.build({ layout, format, output: 'file', zipType: 'nodebuffer' }, data['01-listado-empleados']);
+      const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
+      fs.writeFileSync(path.join(OUT, 'estilos-114__' + format + '__' + r.name), buf);
+      if (format === 'xlsx') {
+        const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0]; const cs = {};
+        ws.eachRow(row => row.eachCell(c => { cs[String(c.value)] = c; }));
+        const h = cs['Estado de cuenta'], d = cs.ACCOUNTING, sal = ws.getRow(d.row).getCell(d.col + 2), sede = ws.getRow(d.row + 1).getCell(d.col);
+        if (!h || h.font.size !== 24 || h.font.name !== 'Times New Roman' || h.fill.fgColor.argb !== 'FF14403F') { throw new Error('xlsx header 1.14'); }
+        if (!d.font.bold) { throw new Error('xlsx ficha bold'); }
+        if (sal.alignment.horizontal !== 'right' || sal.font.color.argb !== 'FF1B7A3D') { throw new Error('xlsx ficha align/color'); }
+        if (sede.alignment.horizontal !== 'center' || sede.fill.fgColor.argb !== 'FFFDECEC' || sede.font.color.argb !== 'FFA61B1B') { throw new Error('xlsx ficha center/fill/colorBy'); }
+      }
+      if (format === 'docx') {
+        const xml = await (await window.JSZip.loadAsync(buf)).file('word/document.xml').async('string');
+        if (!/Times New Roman/.test(xml) || !/w:sz w:val="48"/.test(xml) || !/14403F/.test(xml)) { throw new Error('docx header 1.14'); }
+        if (!/FDECEC/.test(xml) || !/A61B1B/.test(xml) || !/1B7A3D/.test(xml) || !/w:jc w:val="center"/.test(xml)) { throw new Error('docx ficha 1.14'); }
+      }
+      console.log('OK  ', 'estilos-114__' + format + '__' + r.name);
+    }
+  }
 })().catch(e => { console.error('FALLÓ', e); process.exit(1); });

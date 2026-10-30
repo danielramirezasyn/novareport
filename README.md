@@ -1,6 +1,6 @@
 # novaReport — PDF, Excel y Word para Oracle APEX
 
-[![Versión](https://img.shields.io/badge/versión-1.13.0-1F4E79)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versión-1.14.0-1F4E79)](CHANGELOG.md)
 [![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requisitos)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green)](LICENSE)
 

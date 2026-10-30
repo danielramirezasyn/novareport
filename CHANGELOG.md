@@ -1,5 +1,10 @@
 # Cambios
 
+## 1.14.0
+- `header`: **`subtitleSize`** y **`rightSize`** (tamaño del subtítulo y del texto derecho), **`font`** (`helvetica`, `times`, `courier`), **`fill`** y **`color`** (fondo y texto sin depender del tema) y `height` (alto mínimo, PDF). En PDF la banda crece con títulos grandes; `size` ahora también aplica en Excel y Word.
+- `ficha`: estilo **por campo** con `align` (`left`, `center`, `right`), `bold`, `color` (fijo o según una columna) y `fill`. PDF, Excel y Word.
+- Sin cambios para diseños existentes: todas las propiedades nuevas son opcionales (los archivos de prueba salen idénticos a 1.13.0).
+
 ## 1.13.0
 - Sección **`tarjetas`**: etiqueta pequeña + valor destacado, fondo y barra de acento (`fields`, `columns`, `fill`, `accent`, `labelColor`, `valueColor`, `labelSize`, `size`, `height`, `cardGap`; `color` por tarjeta, fijo o según una columna). Los valores largos se parten en líneas. PDF, Excel y Word; también dentro de `columnas`.
 - `ficha`: **`grid`** (cuadrícula), `borderColor`, `labelFill`, `labelColor`, `valueColor` y **`labelWidths`** (ancho por etiqueta). Con `grid` o `labelWidths`, Word respeta los anchos de etiqueta en mm.

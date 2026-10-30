@@ -167,6 +167,8 @@ Banda de color con título.
 ```json
 { "type": "header", "title": "Estado de cuenta - {DOC.CLIENTE}", "subtitle": "Corte al {TODAY}",
   "right": "Generado: {NOW}", "size": 14 }
+{ "type": "header", "title": "Estado de cuenta", "subtitle": "{DOC.CLIENTE}", "right": "Corte al {DOC.FECHA}",
+  "size": 24, "subtitleSize": 12, "rightSize": 11, "font": "times", "fill": "#14403F", "color": "#F5F0E1" }
 ```
 
 | Propiedad | Defecto | Descripción |
@@ -174,7 +176,15 @@ Banda de color con título.
 | `title` | — | Título (70 % del ancho en PDF). |
 | `subtitle` | — | Segunda línea. |
 | `right` | — | Texto a la derecha. En Excel se une al subtítulo con ` \| `. |
-| `size` | `14` | Tamaño del título (PDF). |
+| `size` | `14` | Tamaño del título en pt. |
+| `subtitleSize` | `9` | Tamaño del subtítulo en pt. En Excel, el de la segunda fila (subtítulo y texto derecho van juntos). |
+| `rightSize` | `9` | Tamaño del texto de la derecha en pt. |
+| `font` | `helvetica` | `helvetica`, `times` o `courier` (alias `arial`, `serif`, `mono`). Sin `font`, Word usa Calibri y Excel la letra por defecto. |
+| `fill` | `theme.primary` | Fondo de la banda. |
+| `color` | `theme.headText` | Color del texto. |
+| `height` | automático | Alto mínimo de la banda en mm (PDF). La banda crece sola con títulos grandes. |
+
+En PDF la banda siempre va en la parte superior de la página.
 
 ### `tarjetas`
 
@@ -234,6 +244,16 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
 | `fields[].fmt` | — | Formato si `value` es un solo marcador (`"{SALDO}"`). En Excel deja el número o la fecha como valor real. |
 | `fields[].map` | — | Traduce el valor: `{ "A": "Activo" }`. |
 | `fields[].when` | — | El campo solo aparece si se cumple la [condición](#condiciones). |
+| `fields[].align` | — | Alineación del valor: `left`, `center`, `right`. |
+| `fields[].bold` | `false` | Valor en negrita. |
+| `fields[].color` | `valueColor` | Color del valor, fijo (`"#1B7A3D"`) o según una columna: `{ "by", "values", "default" }`, como en [`alerta`](#alerta). |
+| `fields[].fill` | — | Fondo de la celda del valor. |
+
+```json
+{ "label": "Saldo",  "value": "{SALDO}", "fmt": "money", "align": "right", "bold": true, "color": "#1B7A3D" }
+{ "label": "Estado", "value": "{ESTADO}", "align": "center", "fill": "#FDECEC",
+  "color": { "by": "ESTADO", "values": { "M": "#A61B1B" }, "default": "#000000" } }
+```
 
 ### `tabla`
 
@@ -539,6 +559,9 @@ Pone 2 o 3 casillas **lado a lado**; cada casilla lleva sus propias secciones. S
 | `tarjetas` | ✓ | ✓ | ✓ |
 | `ficha` | ✓ | ✓ valores reales | ✓ |
 | `ficha.grid`, `labelFill`, `labelColor`, `valueColor` | ✓ | ✓ | ✓ |
+| `ficha.fields[]`: `align`, `bold`, `color`, `fill` | ✓ | ✓ | ✓ |
+| `header`: `subtitleSize`, `rightSize`, `font`, `fill`, `color` | ✓ | ✓ | ✓ |
+| `header.height` | ✓ | — | — |
 | `formulario` | ✓ AcroForm | ✓ celdas editables | ✓ controles de contenido |
 | `tabla` | ✓ | ✓ fórmulas, filtro | ✓ |
 | `tabla.groups` | ✓ | ✓ | ✓ |

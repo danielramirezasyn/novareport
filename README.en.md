@@ -1,6 +1,6 @@
 # novaReport — PDF, Excel and Word for Oracle APEX
 
-[![Version](https://img.shields.io/badge/version-1.13.0-1F4E79)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.14.0-1F4E79)](CHANGELOG.md)
 [![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requirements)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -187,9 +187,9 @@ select h.empno doc_key, h.change_date, h.position from history h
 
 | Section | Purpose | Key properties |
 |---|---|---|
-| `header` | Colored title band | `title`, `subtitle`, `right`, `size` |
+| `header` | Colored title band | `title`, `subtitle`, `right`, `size`, `subtitleSize`, `rightSize`, `font`, `fill`, `color` |
 | `tarjetas` | Summary tiles: small label + highlighted value | `source`, `fields[{label, value, fmt, map, when, color}]`, `columns`, `fill`, `accent`, `labelColor`, `valueColor`, `size` |
-| `ficha` | Label / value pairs | `source`, `columns`, `fields[{label, value, fmt, map, when}]`, `grid`, `labelWidths`, `labelFill`, `labelColor`, `valueColor` |
+| `ficha` | Label / value pairs | `source`, `columns`, `fields[{label, value, fmt, map, when, align, bold, color, fill}]`, `grid`, `labelWidths`, `labelFill`, `labelColor`, `valueColor` |
 | `tabla` | Table | `source`, `columns[{col, label, fmt, align, bold, color, width, map, value, cellStyle, when}]`, `totals` (`sum`/`avg`/`min`/`max`/`count`), `breakBy`, `rowStyle`, `groups`, `filter`, `title`, `emptyText`, `headAlign`, `grid`, `totalsColor` |
 | `formulario` | Fillable fields | `fields[{name, label, input (text/multiline/list/checkbox), value, options, optionsFrom, maxLength, lines, readOnly}]`, `columns`; `form.protect` / `form.password` |
 | `alerta` | Colored banner when a condition holds | `source`, `when`, `each`, `text`, `color` |
