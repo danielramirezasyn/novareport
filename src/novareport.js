@@ -1,5 +1,5 @@
 /*!
- * novaReport 1.11.0 - Reportes PDF / Excel / Word para Oracle APEX
+ * novaReport 1.13.0 - Reportes PDF / Excel / Word para Oracle APEX
  * https://github.com/danielramirezasyn/novareport - Licencia MIT
  * NovaCode - plugin de Acción Dinámica COM.NOVACODE.NOVAREPORT
  *
@@ -10,7 +10,7 @@
 window.novaReport = (function () {
   'use strict';
 
-  var VERSION = '1.11.0';
+  var VERSION = '1.13.0';
 
   /* ------------------------------------------------------------------ librerías */
   var LIBS = {
@@ -268,7 +268,7 @@ window.novaReport = (function () {
       return { col: name, value: c.value, label: c.label !== undefined ? c.label : label(name || ''),
                fmt: f, map: c.map, bold: !!c.bold, width: c.width,
                align: c.align || (textFmt(f) ? 'left' : (t === 'NUMBER' || f === 'money' || f === 'int' || f === 'num' ? 'right' : (t === 'DATE' || f === 'date' ? 'center' : 'left'))),
-               cellStyle: c.cellStyle, color: c.color,
+               cellStyle: c.cellStyle, color: c.color, headAlign: c.headAlign,
                isNum: !textFmt(f) && ((t === 'NUMBER' && !c.map && !c.value) || f === 'money' || f === 'int' || /^num/.test(f || '')) };
     });
   }
@@ -384,11 +384,180 @@ window.novaReport = (function () {
     if (f.fmt && /^\{[^}|]+\}$/.test(v || '')) { return fmt(lookup(ctx, v.slice(1, -1), row), f.fmt); }
     return tpl(v, ctx, row);
   }
+  /* ================================================================== FORMULARIO (campos editables) */
+  var FORM_INPUTS = { text: 1, multiline: 1, list: 1, checkbox: 1 };
+  var FORM_FILL = '#F2F6FA', FORM_LINE = '#BFC9D4', BOX_ON = '☒', BOX_OFF = '☐';
+  /* Nombre de campo: letras, números y _, hasta 40; no puede parecer una celda de Excel (A1, R1C1) */
+  function formName(n) {
+    var s = String(n === null || n === undefined ? '' : n);
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(s) || /^[A-Za-z]{1,3}[0-9]+$/.test(s) || /^[RrCc]$/.test(s) || /^[Rr][0-9]*[Cc][0-9]*$/.test(s)) {
+      throw new Error('Nombre de campo inválido: "' + s + '". Use letras, números y _ (hasta 40, sin espacios ni puntos) y que no parezca una celda de Excel (A1, R1C1).');
+    }
+    return s;
+  }
+  /* Registro de nombres por documento generado: falla si un nombre se repite (sin distinguir mayúsculas) */
+  function formNames() {
+    var seen = {};
+    return function (n) {
+      var k = n.toLowerCase();
+      if (seen[k]) { throw new Error('Nombre de campo repetido en el documento: "' + n + '".'); }
+      seen[k] = 1;
+      return n;
+    };
+  }
+  function truthy(v) { return v === true || /^(s|si|sí|y|yes|1|x|true|on)$/i.test(String(v === null || v === undefined ? '' : v).trim()); }
+  function formOptions(f, ctx) {
+    var out = [];
+    function add(v) { v = String(v === null || v === undefined ? '' : v); if (v !== '' && out.indexOf(v) < 0) { out.push(v); } }
+    (Array.isArray(f.options) ? f.options : []).forEach(add);
+    if (f.optionsFrom) {
+      var p = String(f.optionsFrom).split('.'), col = p[1] ? p[1].toUpperCase() : null;
+      rowsOf({ source: p[0] }, ctx).forEach(function (r) { add(col ? r[col] : r[Object.keys(r)[0]]); });
+    }
+    return out;
+  }
+  /* Campos de una sección "formulario" ya resueltos para el documento; suffix distingue documentos en salida unida */
+  function formFields(sec, ctx, suffix) {
+    var fr = rowsOf(sec, ctx)[0] || {};
+    return (sec.fields || []).filter(function (f) { return f && (!f.when || cond(f.when, ctx, fr)); }).map(function (f) {
+      var input = String(f.input || 'text').toLowerCase();
+      if (!FORM_INPUTS[input]) { throw new Error('Tipo de campo no soportado: "' + f.input + '" (text, multiline, list, checkbox).'); }
+      var name = formName(f.name) + (suffix || '');
+      var val = f.value === undefined || f.value === null ? '' : String(fieldText(f, ctx, fr));
+      var opts = input === 'list' ? formOptions(f, ctx) : [];
+      if (input === 'list' && !opts.length) { throw new Error('El campo "' + name + '" es una lista sin opciones (options u optionsFrom).'); }
+      var max = (input === 'text' || input === 'multiline') && Number(f.maxLength) > 0 ? Math.floor(Number(f.maxLength)) : 0;
+      if (input !== 'multiline') { val = val.replace(/\r?\n/g, ' '); }
+      if (input === 'list' && opts.indexOf(val) < 0) { val = ''; }
+      if (max) { val = val.substr(0, max); }
+      return { label: tpl(f.label, ctx, fr), name: name, input: input, options: opts,
+               value: input === 'checkbox' ? '' : val, checked: input === 'checkbox' && truthy(val),
+               maxLength: max, readOnly: f.readOnly === true,
+               lines: input === 'multiline' ? Math.max(2, Math.min(20, Number(f.lines) || 3)) : 1,
+               placeholder: f.placeholder ? tpl(f.placeholder, ctx, fr) : '' };
+    });
+  }
+  /* Protección del formulario: layout.form.protect (defecto true) y contraseña (la de run() tiene prioridad) */
+  function formProtect(layout, opt) {
+    var fm = layout.form || {};
+    var pw = opt && opt.formPassword !== undefined && opt.formPassword !== null ? opt.formPassword : fm.password;
+    return { protect: fm.protect !== false, password: pw ? String(pw) : '' };
+  }
+  function hasForm(list) {
+    return (list || []).some(function (s) { return s && (s.type === 'formulario' || (s.type === 'columnas' && (s.cols || []).some(hasForm))); });
+  }
+  function layoutHasForm(layout) {
+    var sm = layout && layout.batch && layout.batch.summary;
+    return hasForm(layout && layout.sections) || !!(sm && (hasForm(sm.sections) || (sm.layout && hasForm(sm.layout.sections))));
+  }
+
+  /* SHA-512 (para el hash de la contraseña de protección de Word). Palabras de 64 bits como pares hi/lo en Int32. */
+  var K512 = [1116352408, 3609767458, 1899447441, 602891725, 3049323471, 3964484399, 3921009573, 2173295548, 961987163, 4081628472, 1508970993, 3053834265, 2453635748, 2937671579, 2870763221, 3664609560, 3624381080, 2734883394, 310598401, 1164996542, 607225278, 1323610764, 1426881987, 3590304994, 1925078388, 4068182383, 2162078206, 991336113, 2614888103, 633803317, 3248222580, 3479774868, 3835390401, 2666613458, 4022224774, 944711139, 264347078, 2341262773, 604807628, 2007800933, 770255983, 1495990901, 1249150122, 1856431235, 1555081692, 3175218132, 1996064986, 2198950837, 2554220882, 3999719339, 2821834349, 766784016, 2952996808, 2566594879, 3210313671, 3203337956, 3336571891, 1034457026, 3584528711, 2466948901, 113926993, 3758326383, 338241895, 168717936, 666307205, 1188179964, 773529912, 1546045734, 1294757372, 1522805485, 1396182291, 2643833823, 1695183700, 2343527390, 1986661051, 1014477480, 2177026350, 1206759142, 2456956037, 344077627, 2730485921, 1290863460, 2820302411, 3158454273, 3259730800, 3505952657, 3345764771, 106217008, 3516065817, 3606008344, 3600352804, 1432725776, 4094571909, 1467031594, 275423344, 851169720, 430227734, 3100823752, 506948616, 1363258195, 659060556, 3750685593, 883997877, 3785050280, 958139571, 3318307427, 1322822218, 3812723403, 1537002063, 2003034995, 1747873779, 3602036899, 1955562222, 1575990012, 2024104815, 1125592928, 2227730452, 2716904306, 2361852424, 442776044, 2428436474, 593698344, 2756734187, 3733110249, 3204031479, 2999351573, 3329325298, 3815920427, 3391569614, 3928383900, 3515267271, 566280711, 3940187606, 3454069534, 4118630271, 4000239992, 116418474, 1914138554, 174292421, 2731055270, 289380356, 3203993006, 460393269, 320620315, 685471733, 587496836, 852142971, 1086792851, 1017036298, 365543100, 1126000580, 2618297676, 1288033470, 3409855158, 1501505948, 4234509866, 1607167915, 987167468, 1816402316, 1246189591];
+  function sha512(bytes) {
+    var t, r, H = [1779033703, 4089235720, 3144134277, 2227873595, 1013904242, 4271175723, 2773480762, 1595750129, 1359893119, 2917565137, 2600822924, 725511199, 528734635, 4215389547, 1541459225, 327033209];
+    var len = bytes.length, size = len + 17 + 127 >> 7 << 7, m = new Uint8Array(size), w = new Int32Array(160);
+    m.set(bytes); m[len] = 128;
+    var bits = len * 8;
+    m[size - 1] = bits & 255; m[size - 2] = bits >>> 8 & 255; m[size - 3] = bits >>> 16 & 255; m[size - 4] = bits >>> 24 & 255;
+    m[size - 5] = Math.floor(bits / 4294967296) & 255;
+    var T32 = 4294967296;
+    for (var off = 0; off < size; off += 128) {
+      for (t = 0; t < 32; t++) { r = off + t * 4; w[t] = m[r] << 24 | m[r + 1] << 16 | m[r + 2] << 8 | m[r + 3]; }
+      for (t = 32; t < 160; t += 2) {
+        var xh = w[t - 30], xl = w[t - 29], yh = w[t - 4], yl = w[t - 3];
+        var s0h = (xh >>> 1 | xl << 31) ^ (xh >>> 8 | xl << 24) ^ xh >>> 7;
+        var s1h = (yh >>> 19 | yl << 13) ^ (yl >>> 29 | yh << 3) ^ yh >>> 6;
+        var s1l = (yl >>> 19 | yh << 13) ^ (yh >>> 29 | yl << 3) ^ (yl >>> 6 | yh << 26);
+        var lo = (((xl >>> 1 | xh << 31) ^ (xl >>> 8 | xh << 24) ^ (xl >>> 7 | xh << 25)) >>> 0) + (w[t - 13] >>> 0) + (s1l >>> 0) + (w[t - 31] >>> 0);
+        var hi = s0h + w[t - 14] + s1h + w[t - 32] + Math.floor(lo / T32) | 0;
+        w[t] = hi; w[t + 1] = lo | 0;
+      }
+      var ah = H[0], al = H[1], bh = H[2], bl = H[3], ch = H[4], cl = H[5], dh = H[6], dl = H[7],
+          eh = H[8], el = H[9], fh = H[10], fl = H[11], gh = H[12], gl = H[13], hh = H[14], hl = H[15];
+      for (t = 0; t < 160; t += 2) {
+        var S1h = (eh >>> 14 | el << 18) ^ (eh >>> 18 | el << 14) ^ (el >>> 9 | eh << 23);
+        var chh = eh & fh ^ ~eh & gh;
+        var t1l = (hl >>> 0) + (((el >>> 14 | eh << 18) ^ (el >>> 18 | eh << 14) ^ (eh >>> 9 | el << 23)) >>> 0) + ((el & fl ^ ~el & gl) >>> 0) + (K512[t + 1] >>> 0) + (w[t + 1] >>> 0);
+        var t1h = hh + S1h + chh + K512[t] + w[t] + Math.floor(t1l / T32) | 0;
+        t1l |= 0;
+        var t2l = (((al >>> 28 | ah << 4) ^ (ah >>> 2 | al << 30) ^ (ah >>> 7 | al << 25)) >>> 0) + ((al & bl ^ al & cl ^ bl & cl) >>> 0);
+        var t2h = ((ah >>> 28 | al << 4) ^ (al >>> 2 | ah << 30) ^ (al >>> 7 | ah << 25)) + (ah & bh ^ ah & ch ^ bh & ch) + Math.floor(t2l / T32) | 0;
+        t2l |= 0;
+        hh = gh; hl = gl; gh = fh; gl = fl; fh = eh; fl = el;
+        var sl = (dl >>> 0) + (t1l >>> 0);
+        eh = dh + t1h + Math.floor(sl / T32) | 0; el = sl | 0;
+        dh = ch; dl = cl; ch = bh; cl = bl; bh = ah; bl = al;
+        sl = (t1l >>> 0) + (t2l >>> 0);
+        ah = t1h + t2h + Math.floor(sl / T32) | 0; al = sl | 0;
+      }
+      var V = [ah, al, bh, bl, ch, cl, dh, dl, eh, el, fh, fl, gh, gl, hh, hl];
+      for (t = 0; t < 16; t += 2) {
+        var s2 = (H[t + 1] >>> 0) + (V[t + 1] >>> 0);
+        H[t] = H[t] + V[t] + Math.floor(s2 / T32) | 0; H[t + 1] = s2 | 0;
+      }
+    }
+    var out = new Uint8Array(64);
+    for (t = 0; t < 16; t++) { out[t * 4] = H[t] >>> 24; out[t * 4 + 1] = H[t] >>> 16 & 255; out[t * 4 + 2] = H[t] >>> 8 & 255; out[t * 4 + 3] = H[t] & 255; }
+    return out;
+  }
+  /* Clave heredada de Word (ECMA-376 §17.15.1.29): 8 dígitos hex a partir de la contraseña */
+  var WK_INIT = [57840, 7439, 52380, 33984, 4364, 3600, 61902, 12606, 6258, 57657, 54287, 34041, 10252, 43370, 20163];
+  var WK_MATRIX = [[44796, 19929, 39858, 10053, 20106, 40212, 10761], [31585, 63170, 64933, 60267, 50935, 40399, 11199],
+    [17763, 35526, 1453, 2906, 5812, 11624, 23248], [885, 1770, 3540, 7080, 14160, 28320, 56640],
+    [55369, 41139, 20807, 41614, 21821, 43642, 17621], [28485, 56970, 44341, 19019, 38038, 14605, 29210],
+    [60195, 50791, 40175, 10751, 21502, 43004, 24537], [18387, 36774, 3949, 7898, 15796, 31592, 63184],
+    [47201, 24803, 49606, 37805, 14203, 28406, 56812], [17824, 35648, 1697, 3394, 6788, 13576, 27152],
+    [43601, 17539, 35078, 557, 1114, 2228, 4456], [30388, 60776, 51953, 34243, 7079, 14158, 28316],
+    [14128, 28256, 56512, 43425, 17251, 34502, 7597], [13105, 26210, 52420, 35241, 883, 1766, 3532],
+    [4129, 8258, 16516, 33032, 4657, 9314, 18628]];
+  function wordLegacyKey(pw) {
+    var i, j, ch = [], hex = function (n) { return (n < 16 ? '0' : '') + n.toString(16).toUpperCase(); };
+    for (i = 0; i < pw.length; i++) { var c = pw.charCodeAt(i); ch.push((c & 255) || (c >> 8 & 255)); }
+    var hi = WK_INIT[ch.length - 1], row = 15 - ch.length, lo = 0;
+    for (i = 0; i < ch.length; i++) {
+      var b = ch[i], mx = WK_MATRIX[row++];
+      for (j = 0; j < 7; j++) { if (b & 1) { hi ^= mx[j]; } b >>= 1; }
+    }
+    function rot(v) { return (v >> 14 & 1) | (v << 1 & 32767); }
+    for (i = ch.length - 1; i >= 0; i--) { lo = rot(lo) ^ ch[i]; }
+    lo = rot(lo) ^ ch.length ^ 52811;
+    return hex(lo & 255) + hex(lo >> 8 & 255) + hex(hi & 255) + hex(hi >> 8 & 255);
+  }
+  /* Hash de documentProtection: SHA-512(sal + clave heredada en UTF-16LE), repetido spin veces con el contador */
+  function wordHash(pw, salt, spin) {
+    if (!/^[\x20-\x7E]{1,15}$/.test(pw)) { throw new Error('La contraseña de protección de Word admite de 1 a 15 caracteres ASCII (sin tildes ni ñ).'); }
+    var i, key = wordLegacyKey(pw), buf = new Uint8Array(salt.length + key.length * 2);
+    buf.set(salt);
+    for (i = 0; i < key.length; i++) { buf[salt.length + i * 2] = key.charCodeAt(i); }
+    var h = sha512(buf), it = new Uint8Array(68);
+    for (i = 0; i < spin; i++) {
+      it.set(h); it[64] = i & 255; it[65] = i >>> 8 & 255; it[66] = i >>> 16 & 255; it[67] = i >>> 24 & 255;
+      h = sha512(it);
+    }
+    return h;
+  }
+
+  /* ---------- Estilo de ficha y tabla en grilla (1.13) */
+  var GRID_LINE = '#D5DCE3';
+  function labelW(sec, i) { var a = sec.labelWidths; return (Array.isArray(a) && Number(a[i]) > 0) ? Number(a[i]) : (sec.labelWidth || 32); }
+  /* Alineación del encabezado de una columna: columna > tabla > centro; "auto" = la de los datos */
+  function headAlignOf(c, sec) { var a = c.headAlign || sec.headAlign || 'center'; return a === 'auto' ? c.align : a; }
+  /* ---------- Tarjetas (1.13): etiqueta pequeña + valor destacado, con barra de acento a la izquierda */
+  function cardsOf(sec, ctx, th) {
+    var fr = rowsOf(sec, ctx)[0] || {};
+    var items = (sec.fields || sec.items || []).filter(function (f) { return f && (!f.when || cond(f.when, ctx, fr)); }).map(function (f) {
+      return { label: tpl(f.label, ctx, fr), value: fieldText(f, ctx, fr), color: f.color ? colorOf(f.color, ctx, fr) : null };
+    });
+    var n = Math.max(1, Math.min(6, Number(sec.columns) || Math.min(items.length, 6) || 1));
+    return { items: items, n: n, fill: sec.fill || '#F1F4F2', accent: sec.accent === undefined ? th.primary : sec.accent,
+             labelColor: sec.labelColor || '#787878', valueColor: sec.valueColor || th.primary,
+             labelSize: sec.labelSize || 7, size: sec.size || 11, cardGap: sec.cardGap !== undefined ? Number(sec.cardGap) : 3 };
+  }
   function sectionsFor(layout, format, ctx) {
     return (layout.sections || []).filter(function (s) { return (!s.formats || s.formats.indexOf(format) >= 0) && (!ctx || shown(s, ctx)); });
   }
   /* Columnas: 1 a 3 casillas lado a lado. Dentro solo van secciones que no dependen de la página completa. */
-  var CELL_TYPES = { ficha: 1, texto: 1, imagen: 1, codigo: 1, alerta: 1, linea: 1, tabla: 1, grafico: 1, espacio: 1 };
+  var CELL_TYPES = { ficha: 1, formulario: 1, tarjetas: 1, texto: 1, imagen: 1, codigo: 1, alerta: 1, linea: 1, tabla: 1, grafico: 1, espacio: 1 };
   function fitCell(c, w) {
     var o = {}, k;
     for (k in c) { if (Object.prototype.hasOwnProperty.call(c, k)) { o[k] = c[k]; } }
@@ -760,9 +929,50 @@ window.novaReport = (function () {
   }
 
   /* ================================================================== PDF */
+  /* Campo AcroForm dentro de la celda (recuadro con fondo, como en Word y Excel) */
+  function pdfField(doc, f, cell, fontSize) {
+    var J = window.jspdf, fld, x = cell.x + 0.6, y = cell.y + 0.6, w = cell.width - 1.2, h = cell.height - 1.2;
+    var bg = hexRgb(FORM_FILL), ln = hexRgb(FORM_LINE);
+    if (f.input === 'checkbox') { var s = Math.min(h, 4.5); y += (h - s) / 2; w = s; h = s; }
+    doc.setDrawColor(ln[0], ln[1], ln[2]); doc.setFillColor(bg[0], bg[1], bg[2]); doc.setLineWidth(0.2);
+    doc.rect(x, y, w, h, 'FD');
+    doc.setDrawColor(0, 0, 0);
+    if (f.input === 'checkbox') {
+      fld = new J.AcroFormCheckBox();
+      fld.appearanceState = f.checked ? 'On' : 'Off';
+      fld.value = f.checked ? 'On' : 'Off';
+    } else if (f.input === 'list') {
+      fld = new J.AcroFormComboBox();
+      fld.setOptions(f.options);
+      fld.edit = false;
+      if (f.value) { fld.value = f.value; }
+    } else {
+      fld = new J.AcroFormTextField();
+      fld.multiline = f.input === 'multiline';
+      if (f.maxLength) { fld.maxLength = f.maxLength; }
+      if (f.value) { fld.value = f.value; }
+    }
+    fld.fieldName = f.name;
+    fld.Rect = [x, y, w, h];
+    if (f.input !== 'checkbox') { fld.fontSize = fontSize; if (!doc.__nrFormSize) { doc.__nrFormSize = fontSize; } }
+    if (f.readOnly) { fld.readOnly = true; }
+    doc.addField(fld);
+  }
+  /* AcroForm: fuente por defecto (Helvetica WinAnsi) y NeedAppearances para que los visores dibujen los valores */
+  function pdfFormFix(doc) {
+    var af = doc.internal.acroformPlugin, root = af && af.acroFormDictionaryRoot;
+    if (!root || !root.Fields || !root.Fields.length || root.__nr) { return; }
+    var helv = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+    var id = doc.internal.getFont('helvetica', 'normal').id;
+    root.DA = '/Helv ' + (doc.__nrFormSize || 9) + ' Tf 0 g';
+    Object.defineProperty(root, 'DR', { enumerable: true, configurable: false,
+      value: '<< /Font << /Helv ' + helv + (id && id !== 'Helv' ? ' /' + id + ' ' + helv : '') + ' /ZaDb << /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >> >> >>' });
+    Object.defineProperty(root, 'NeedAppearances', { enumerable: true, configurable: false, value: 'true' });
+    root.__nr = true;
+  }
   function renderPdf(layout, ctxs, hooks) {
     var page = layout.page || {}, th = themeOf(layout), sz = th.fontSize;
-    var doc = new window.jspdf.jsPDF({ orientation: page.orientation || 'portrait', unit: 'mm', format: page.size || 'letter', compress: true });
+    var doc = new window.jspdf.jsPDF({ orientation: page.orientation || 'portrait', unit: 'mm', format: page.size || 'letter', compress: !layoutHasForm(layout) });
     var W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = page.margin || 8;
     var P = hexRgb(th.primary), HT = hexRgb(th.headText), Z = hexRgb(th.zebra), TT = hexRgb(th.totals);
     var y = M, firstDoc = true;
@@ -781,7 +991,8 @@ window.novaReport = (function () {
     }
     var ranges = [];
 
-    ctxs.forEach(function (ctx) {
+    ctxs.forEach(function (ctx, di) {
+      var suffix = ctxs.length > 1 ? '_' + (di + 1) : '';
       if (!firstDoc) { doc.addPage(); }
       firstDoc = false;
       y = M;
@@ -951,9 +1162,71 @@ window.novaReport = (function () {
             if (cur.length === n * 2) { body.push(cur); cur = []; }
           });
           if (cur.length) { while (cur.length < n * 2) { cur.push(''); } body.push(cur); }
-          for (var i = 0; i < n * 2; i += 2) { cs[i] = { fontStyle: 'bold', cellWidth: sec.labelWidth || 32 }; }
-          doc.autoTable({ startY: y, body: body, theme: 'plain', margin: { left: XL, right: XR },
-                          styles: { fontSize: sec.size || 8.5, cellPadding: 0.9 }, columnStyles: cs });
+          for (var i = 0; i < n * 2; i += 2) {
+            cs[i] = { fontStyle: 'bold', cellWidth: labelW(sec, i / 2) };
+            if (sec.labelFill) { cs[i].fillColor = hexRgb(sec.labelFill); }
+            if (sec.labelColor) { cs[i].textColor = hexRgb(sec.labelColor); }
+            if (sec.valueColor) { cs[i + 1] = { textColor: hexRgb(sec.valueColor) }; }
+          }
+          var fst = { fontSize: sec.size || 8.5, cellPadding: 0.9 };
+          if (sec.grid) { fst.cellPadding = 1.6; fst.valign = 'middle'; fst.lineWidth = 0.15; fst.lineColor = hexRgb(sec.borderColor || GRID_LINE); }
+          doc.autoTable({ startY: y, body: body, theme: 'plain', margin: { left: XL, right: XR }, styles: fst, columnStyles: cs });
+          gap(2);
+          return;
+        }
+        if (t === 'tarjetas') {
+          var kd = cardsOf(sec, ctx, th);
+          if (!kd.items.length) { return; }
+          var kw = (W - XL - XR - kd.cardGap * (kd.n - 1)) / kd.n, kl = kd.labelSize * 0.3528, kv = kd.size * 0.3528;
+          var kf = hexRgb(kd.fill), ka = kd.accent ? hexRgb(kd.accent) : null, kpad = ka ? 4 : 3, ktw = kw - kpad - 2;
+          y = Math.max(y, last());
+          for (var ki = 0; ki < kd.items.length; ki += kd.n) {
+            var krow = kd.items.slice(ki, ki + kd.n);
+            /* El valor se parte en líneas (como en Word); la fila toma el alto de la tarjeta más alta */
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(kd.size);
+            var klines = krow.map(function (it) { return doc.splitTextToSize(String(it.value), ktw); });
+            var kmax = Math.max.apply(null, klines.map(function (l) { return Math.max(1, l.length); }));
+            var kbody = kl * 1.2 + 1.5 + kv * 1.2 * kmax, kh = Math.max(sec.height || 0, 3 + kbody + 3);
+            if (y + kh > H - M - 10) { doc.addPage(); y = M; }
+            krow.forEach(function (it, j) {
+              var kx = XL + j * (kw + kd.cardGap), lc2 = hexRgb(kd.labelColor), vc2 = hexRgb(it.color || kd.valueColor);
+              doc.setFillColor(kf[0], kf[1], kf[2]); doc.rect(kx, y, kw, kh, 'F');
+              if (ka) { doc.setFillColor(ka[0], ka[1], ka[2]); doc.rect(kx, y, 1.2, kh, 'F'); }
+              var by = y + (kh - kbody) / 2 + kl;
+              doc.setFont('helvetica', 'normal'); doc.setFontSize(kd.labelSize); doc.setTextColor(lc2[0], lc2[1], lc2[2]);
+              doc.text(doc.splitTextToSize(String(it.label), ktw)[0] || '', kx + kpad, by);
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(kd.size); doc.setTextColor(vc2[0], vc2[1], vc2[2]);
+              klines[j].forEach(function (ln, q) { doc.text(ln, kx + kpad, by + 1.5 + kv * 1.05 + q * kv * 1.2); });
+            });
+            y += kh + (ki + kd.n < kd.items.length ? kd.cardGap : 0);
+          }
+          doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0);
+          y += sec.gap !== undefined ? sec.gap : 3; doc.lastAutoTable = { finalY: y };
+          return;
+        }
+        if (t === 'formulario') {
+          if (!doc.__nrForm) { doc.__nrForm = formNames(); }
+          var ffs = formFields(sec, ctx, suffix), nf = sec.columns || 2, fbody = [], fcur = [], fpos = {}, fcs = {}, fsz = sec.size || 8.5;
+          ffs.forEach(function (f) {
+            doc.__nrForm(f.name);
+            fpos[fbody.length + ':' + (fcur.length + 1)] = f;
+            fcur.push(f.label, '');
+            if (fcur.length === nf * 2) { fbody.push(fcur); fcur = []; }
+          });
+          if (fcur.length) { while (fcur.length < nf * 2) { fcur.push(''); } fbody.push(fcur); }
+          if (!fbody.length) { return; }
+          for (var fi = 0; fi < nf * 2; fi += 2) { fcs[fi] = { fontStyle: 'bold', cellWidth: sec.labelWidth || 32 }; }
+          var lineH = 0.3528 * fsz * 1.3;
+          doc.autoTable({ startY: y, body: fbody, theme: 'plain', margin: { left: XL, right: XR }, rowPageBreak: 'avoid',
+            styles: { fontSize: fsz, cellPadding: 1.2, valign: 'middle' }, columnStyles: fcs,
+            didParseCell: function (d) {
+              var f = d.section === 'body' && fpos[d.row.index + ':' + d.column.index];
+              if (f) { d.cell.styles.minCellHeight = f.lines * lineH + 3; }
+            },
+            didDrawCell: function (d) {
+              var f = d.section === 'body' && fpos[d.row.index + ':' + d.column.index];
+              if (f) { pdfField(doc, f, d.cell, fsz); }
+            } });
           gap(2);
           return;
         }
@@ -975,13 +1248,14 @@ window.novaReport = (function () {
             var g1 = [], g2 = [], vm = { halign: 'center', valign: 'middle' };
             groupsOf(sec, cols).forEach(function (g) {
               for (var gi = g.from; gi < g.from + g.cols; gi++) {
-                if (g.gap) { g1.push({ content: cols[gi].label, rowSpan: 2, styles: vm }); } else { g2.push(cols[gi].label); }
+                if (g.gap) { g1.push({ content: cols[gi].label, rowSpan: 2, styles: { halign: headAlignOf(cols[gi], sec), valign: 'middle' } }); }
+                else { g2.push({ content: cols[gi].label, styles: { halign: headAlignOf(cols[gi], sec) } }); }
               }
               if (!g.gap) { g1.push({ content: g.label, colSpan: g.cols, styles: vm }); }
             });
             head.push(g1, g2);
           } else {
-            head.push(cols.map(function (c) { return c.label; }));
+            head.push(cols.map(function (c) { return { content: c.label, styles: { halign: headAlignOf(c, sec) } }; }));
           }
           cols.forEach(function (c, i) {
             colSt[i] = { halign: c.align };
@@ -1002,12 +1276,14 @@ window.novaReport = (function () {
           if (tlist.length && rows.length) {
             foot = pdfAgg(aggRow(cols, tlist, rows, totText(sec, ctx, rows)), cols.length);
           }
+          var tst = { fontSize: sec.size || sz, cellPadding: sec.grid ? 1.2 : 0.8 };
+          if (sec.grid) { tst.lineWidth = 0.15; tst.lineColor = hexRgb(sec.borderColor || GRID_LINE); }
           doc.autoTable({
             startY: y, margin: { left: XL, right: XR }, head: head, body: body, foot: foot || undefined,
             showHead: sec.repeatHeader === false ? 'firstPage' : 'everyPage', showFoot: 'lastPage',
-            styles: { fontSize: sec.size || sz, cellPadding: 0.8 },
+            styles: tst,
             headStyles: { fillColor: P, textColor: HT, halign: 'center', fontSize: sec.size || sz },
-            footStyles: { fillColor: TT, textColor: 0, fontStyle: 'bold', halign: 'right' },
+            footStyles: { fillColor: TT, textColor: sec.totalsColor ? hexRgb(sec.totalsColor) : 0, fontStyle: 'bold', halign: 'right' },
             alternateRowStyles: sec.breakBy ? {} : { fillColor: Z },
             columnStyles: colSt,
             didParseCell: function (h) {
@@ -1070,12 +1346,52 @@ window.novaReport = (function () {
       doc.setTextColor(0, 0, 0);
     }
     if (layout.title) { doc.setProperties({ title: tpl(layout.title, c0) }); }
+    pdfFormFix(doc);
     return Promise.resolve(doc.output('arraybuffer'));
   }
 
   /* ================================================================== EXCEL (ExcelJS) */
-  function renderXlsx(layout, ctxs, merge) {
+  function fieldTitle(f) { return String(f.label || f.name).replace(/\s+/g, ' ').substr(0, 32); }
+  /* Celda editable: desbloqueada (salvo readOnly), con recuadro, nombre definido y validación según el tipo */
+  function xlsxField(c, f, listRef) {
+    var ln = { style: 'thin', color: { argb: argb(FORM_LINE) } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(FORM_FILL) } };
+    c.border = { top: ln, left: ln, bottom: ln, right: ln };
+    c.protection = { locked: !!f.readOnly };
+    c.alignment = { vertical: f.lines > 1 ? 'top' : 'middle', horizontal: f.input === 'checkbox' ? 'center' : 'left', wrapText: f.input === 'multiline' };
+    if (f.input === 'checkbox') {
+      c.value = f.checked ? BOX_ON : BOX_OFF;
+      c.dataValidation = { type: 'list', allowBlank: false, formulae: ['"' + BOX_OFF + ',' + BOX_ON + '"'], showErrorMessage: true,
+                           errorTitle: fieldTitle(f), error: 'Elija ' + BOX_OFF + ' o ' + BOX_ON + '.' };
+    } else {
+      c.value = f.value === '' ? null : f.value;
+      c.numFmt = '@';
+      if (f.input === 'list') {
+        c.dataValidation = { type: 'list', allowBlank: true, formulae: [listRef(f.options)], showErrorMessage: true,
+                             errorTitle: fieldTitle(f), error: 'Elija un valor de la lista.' };
+      } else if (f.maxLength) {
+        c.dataValidation = { type: 'textLength', operator: 'lessThanOrEqual', allowBlank: true, formulae: [f.maxLength], showErrorMessage: true,
+                             errorTitle: fieldTitle(f), error: 'Máximo ' + f.maxLength + ' caracteres.' };
+      }
+    }
+    c.name = f.name;
+  }
+  /* ExcelJS escribe los nombres definidos sin comillas en el nombre de hoja: se agregan para hojas con espacios */
+  function xlsxQuoteNames(wb) {
+    var dn = wb.definedNames, d = dn && Object.getOwnPropertyDescriptor(Object.getPrototypeOf(dn), 'model');
+    if (!d || !d.get || dn.__nr) { return; }
+    Object.defineProperty(dn, 'model', { configurable: true,
+      get: function () {
+        return d.get.call(this).map(function (m) {
+          return { name: m.name, ranges: m.ranges.map(function (rg) { var x = /^([^'!]+)!(.+)$/.exec(rg); return x ? "'" + x[1] + "'!" + x[2] : rg; }) };
+        });
+      },
+      set: function (v) { d.set.call(this, v); } });
+    dn.__nr = true;
+  }
+  function renderXlsx(layout, ctxs, merge, opt) {
     var wb = new window.ExcelJS.Workbook(), th = themeOf(layout), used = {};
+    var prot = formProtect(layout, opt), formReg = formNames(), protects = [], lists = { ws: null, n: 0, ref: {} };
     wb.creator = 'novaReport';
     var defs = (layout.xlsx && layout.xlsx.sheets) || [{ name: layout.xlsx && layout.xlsx.sheetName || 'Reporte' }];
     var secs = sectionsFor(layout, 'xlsx'), page = layout.page || {};
@@ -1088,8 +1404,22 @@ window.novaReport = (function () {
       return n;
     }
     function fill(h) { return { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(h) } }; }
+    function xlsBorder(color) { var b = { style: 'thin', color: { argb: argb(color || GRID_LINE) } }; return { top: b, left: b, bottom: b, right: b }; }
+    /* Origen de una validación de lista: en línea si cabe (255 caracteres, sin comas ni comillas); si no, en una hoja oculta */
+    function listRef(opts) {
+      var k = opts.join(',');
+      if (k.length <= 250 && !/[,"]/.test(opts.join(''))) { return '"' + k + '"'; }
+      if (lists.ref[k]) { return lists.ref[k]; }
+      if (!lists.ws) { lists.ws = wb.addWorksheet(uniq('nr_listas'), { state: 'hidden' }); }
+      var c = ++lists.n;
+      opts.forEach(function (o, i) { lists.ws.getCell(i + 1, c).value = o; });
+      var L = lists.ws.getColumn(c).letter;
+      lists.ref[k] = "'" + lists.ws.name + "'!$" + L + '$1:$' + L + '$' + opts.length;
+      return lists.ref[k];
+    }
 
-    ctxs.forEach(function (ctx) {
+    ctxs.forEach(function (ctx, di) {
+      var suffix = ctxs.length > 1 ? '_' + (di + 1) : '';
       defs.forEach(function (sd) {
         var sname = tpl(sd.name, ctx);
         if (merge && ctxs.length > 1) { sname = tpl(sd.mergeName || (defs.length > 1 ? '{DOC.DOC_KEY} ' + sd.name : '{DOC.DOC_KEY}'), ctx); }
@@ -1100,17 +1430,19 @@ window.novaReport = (function () {
           return typeof id === 'number' ? secs[id] : secs.filter(function (s) { return s.id === id; })[0];
         }).filter(Boolean) : secs;
         list = list.filter(function (s) { return shown(s, ctx); });
-        var maxC = 4, r = 1, widths = {}, tables = 0, freezeAt = null, filterRef = null;
+        var maxC = 4, r = 1, widths = {}, tables = 0, freezeAt = null, filterRef = null, hasFields = false;
         /* Columnas de hoja que necesita cada casilla de una sección columnas */
         var need = function (secs) {
           return secs.reduce(function (m, x) {
-            return Math.max(m, x.type === 'tabla' ? columnsOf(x, ctx, rowsOf(x, ctx)).length : (x.type === 'ficha' ? (x.columns || 3) * 2 : (x.type === 'texto' || x.type === 'alerta' ? 4 : 2)));
+            return Math.max(m, x.type === 'tabla' ? columnsOf(x, ctx, rowsOf(x, ctx)).length : (x.type === 'ficha' ? (x.columns || 3) * 2 : x.type === 'formulario' ? (x.columns || 2) * 2 : x.type === 'tarjetas' ? cardsOf(x, ctx, th).n : (x.type === 'texto' || x.type === 'alerta' ? 4 : 2)));
           }, 2);
         };
         list.forEach(function (s) {
           if (s.type === 'columnas') { maxC = Math.max(maxC, cellsOf(s, 'xlsx', ctx, 100).reduce(function (m, c) { return m + need(c.secs) + 1; }, -1)); }
           if (s.type === 'tabla') { tables++; maxC = Math.max(maxC, columnsOf(s, ctx, rowsOf(s, ctx)).length); }
           if (s.type === 'ficha') { maxC = Math.max(maxC, (s.columns || 3) * 2); }
+          if (s.type === 'formulario') { maxC = Math.max(maxC, (s.columns || 2) * 2); }
+          if (s.type === 'tarjetas') { maxC = Math.max(maxC, cardsOf(s, ctx, th).n); }
         });
         function setW(c, txt) { var l = String(txt === null || txt === undefined ? '' : txt).length; c += C0; widths[c] = Math.min(60, Math.max(widths[c] || 8, l + 2)); }
         /* Casillas de columnas: C0 desplaza la columna de inicio; maxC es el ancho del bloque */
@@ -1185,15 +1517,49 @@ window.novaReport = (function () {
             (sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }).forEach(function (f, i) {
               if (i > 0 && i % n === 0) { r++; c = 1; }
               var lc = cellAt(r, c), vc = cellAt(r, c + 1), lt = tpl(f.label, ctx, fr);
-              lc.value = lt; lc.font = { bold: true };
+              lc.value = lt; lc.font = sec.labelColor ? { bold: true, color: { argb: argb(sec.labelColor) } } : { bold: true };
+              if (sec.labelFill) { lc.fill = fill(sec.labelFill); }
+              if (sec.valueColor) { vc.font = { color: { argb: argb(sec.valueColor) } }; }
+              if (sec.grid) { lc.border = vc.border = xlsBorder(sec.borderColor); lc.alignment = { vertical: 'middle', wrapText: true }; }
               var raw = (/^\{[^}|]+\}$/.test(f.value || '') && !f.map) ? lookup(ctx, f.value.slice(1, -1), fr) : null;
               if (isNum(raw) && !textFmt(f.fmt)) { vc.value = raw; if (f.fmt === 'money') { vc.numFmt = '#,##0.00'; } vc.alignment = { horizontal: 'left' }; }
               else if (f.fmt === 'date' && parseDate(raw)) { vc.value = parseDate(raw); vc.numFmt = 'dd/mm/yyyy'; vc.alignment = { horizontal: 'left' }; }
               else { vc.value = fieldText(f, ctx, fr); }
+              if (sec.grid) { vc.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }; }
               setW(c, lt); setW(c + 1, fieldText(f, ctx, fr));
               c += 2;
             });
             r += 2;
+          } else if (t === 'tarjetas') {
+            var kx = cardsOf(sec, ctx, th);
+            for (var ki = 0; ki < kx.items.length; ki += kx.n) {
+              var kl = 1;
+              kx.items.slice(ki, ki + kx.n).forEach(function (it, j) {
+                var lc = cellAt(r, j + 1), vc = cellAt(r + 1, j + 1);
+                var bl = kx.accent ? { left: { style: 'thick', color: { argb: argb(kx.accent) } } } : {};
+                lc.value = it.label; lc.font = { size: kx.labelSize + 1, color: { argb: argb(kx.labelColor) } };
+                vc.value = it.value; vc.font = { bold: true, size: kx.size, color: { argb: argb(it.color || kx.valueColor) } };
+                [lc, vc].forEach(function (c) { c.fill = fill(kx.fill); c.border = bl; c.alignment = { vertical: 'middle', indent: 1, wrapText: true }; });
+                setW(j + 1, it.label); setW(j + 1, String(it.value).substr(0, 40) + '      ');
+                kl = Math.max(kl, Math.ceil(String(it.value).length / 40));
+              });
+              rowH(r, 16); rowH(r + 1, Math.round(kx.size * 1.7) * kl);
+              r += 3;
+            }
+          } else if (t === 'formulario') {
+            var nfx = sec.columns || 2, fc = 1, ffx = formFields(sec, ctx, suffix);
+            ffx.forEach(function (f, i) {
+              if (i > 0 && i % nfx === 0) { r++; fc = 1; }
+              formReg(f.name);
+              var lc = cellAt(r, fc), vc = cellAt(r, fc + 1);
+              lc.value = f.label; lc.font = { bold: true }; lc.alignment = { vertical: f.lines > 1 ? 'top' : 'middle' };
+              xlsxField(vc, f, listRef);
+              if (f.lines > 1) { rowH(r, 15 * f.lines); }
+              setW(fc, f.label);
+              setW(fc + 1, f.input === 'checkbox' ? '' : (f.value.length > 20 ? f.value : new Array(21).join('x')));
+              fc += 2;
+            });
+            if (ffx.length) { hasFields = true; r += 2; }
           } else if (t === 'alerta') {
             rowsOf(sec, ctx).filter(function (x) { return cond(sec.when, ctx, x); }).slice(0, sec.each ? 999 : 1).forEach(function (x) {
               band(tpl(sec.text, ctx, x), fill(colorOf(sec.color, ctx, x) || '#E6ECF2'), { bold: true }, 30);
@@ -1209,6 +1575,7 @@ window.novaReport = (function () {
               tc.value = tpl(sec.title, ctx); tc.font = { bold: true, color: { argb: argb(th.headText) } }; tc.fill = fillP;
               r++;
             }
+            var gTop = r;
             if (sec.groups) {
               var gc = 1;
               groupsOf(sec, cols).forEach(function (g) {
@@ -1219,7 +1586,7 @@ window.novaReport = (function () {
                     merge(r, gc + gi, r + 1, gc + gi);
                     var gx = cellAt(r, gc + gi);
                     gx.value = cols[g.from + gi].label; gx.fill = fillP; gx.font = { bold: true, color: { argb: argb(th.headText) } };
-                    gx.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                    gx.alignment = { horizontal: headAlignOf(cols[g.from + gi], sec), vertical: 'middle', wrapText: true };
                     setW(gc + gi, cols[g.from + gi].label);
                   }
                   gc += g.cols; return;
@@ -1237,7 +1604,7 @@ window.novaReport = (function () {
               if (gapCol[i]) { return; }
               var h = cellAt(r, i + 1);
               h.value = c.label; h.fill = fillP; h.font = { bold: true, color: { argb: argb(th.headText) } };
-              h.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+              h.alignment = { horizontal: headAlignOf(c, sec), vertical: 'middle', wrapText: true };
               setW(i + 1, c.label);
             });
             r++;
@@ -1250,7 +1617,7 @@ window.novaReport = (function () {
             /* Fila de totales/subtotal con fórmulas; devuelve la siguiente fila libre */
             var xlsAgg = function (r0, list, grows, text, r1, r2, sub) {
               var ar = aggRow(cols, list, grows, text), mixed = aggMixed(list);
-              var paint = function (cell) { cell.fill = fill(th.totals); cell.font = { bold: true }; return cell; };
+              var paint = function (cell) { cell.fill = fill(th.totals); cell.font = sec.totalsColor ? { bold: true, color: { argb: argb(sec.totalsColor) } } : { bold: true }; return cell; };
               if (ar.at > 1 || ar.at === 0) { merge(r0, 1, r0, ar.at || cols.length); }
               var tl = paint(cellAt(r0, 1));
               tl.value = text; tl.alignment = { horizontal: 'left' };
@@ -1307,6 +1674,10 @@ window.novaReport = (function () {
             });
             var lastData = r - 1, tlist = aggList(sec.totals);
             if (tlist.length) { r = xlsAgg(r, tlist, rows, totText(sec, ctx, rows), first, r - 1, !!sec.breakBy); }
+            if (sec.grid) {
+              var gb = xlsBorder(sec.borderColor);
+              for (var gr = gTop; gr < r; gr++) { for (var gk = 1; gk <= cols.length; gk++) { cellAt(gr, gk).border = gb; } }
+            }
             if (tables === 1 && !sec.breakBy && !inCols) {
               filterRef = { from: { row: hr, column: 1 }, to: { row: lastData, column: cols.length } };
               if (list.indexOf(sec) <= 1) { freezeAt = hr; }
@@ -1317,12 +1688,17 @@ window.novaReport = (function () {
         Object.keys(widths).forEach(function (c) { ws.getColumn(+c).width = widths[c]; });
         if (filterRef) { ws.autoFilter = filterRef; }
         if (freezeAt) { ws.views = [{ state: 'frozen', ySplit: freezeAt }]; }
+        /* Hoja con campos: protegida; solo las celdas de los campos quedan editables */
+        if (hasFields && prot.protect) {
+          protects.push(ws.protect(prot.password, { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true, formatRows: true }));
+        }
         if (layout.footer) {
           ws.headerFooter.oddFooter = '&L&8' + tpl(layout.footer.left, ctx).replace(/&/g, '&&').substr(0, 200) + '&R&8Página &P de &N';
         }
       });
     });
-    return wb.xlsx.writeBuffer();
+    if (layoutHasForm(layout)) { xlsxQuoteNames(wb); }
+    return protects.length ? Promise.all(protects).then(function () { return wb.xlsx.writeBuffer(); }) : wb.xlsx.writeBuffer();
   }
 
   /* ================================================================== WORD (docx) */
@@ -1343,14 +1719,74 @@ window.novaReport = (function () {
     if (ft.right) { out.push(new D.Paragraph({ alignment: D.AlignmentType.RIGHT, children: runs(ft.right) })); }
     return out.length ? out : [new D.Paragraph({ children: [] })];
   }
-  function renderDocx(layout, ctxs) {
-    var D = window.docx, th = themeOf(layout), page = layout.page || {};
+  /* ---------- Formulario en Word: controles de contenido (w:sdt) y protección "solo formularios" */
+  var FORM_MARK = '⟦NRF:', FORM_END = '⟧';
+  function xmlEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function randBytes(n) {
+    var b = new Uint8Array(n), c = typeof window !== 'undefined' && (window.crypto || window.msCrypto);
+    if (c && c.getRandomValues) { c.getRandomValues(b); } else { for (var i = 0; i < n; i++) { b[i] = Math.floor(Math.random() * 256); } }
+    return b;
+  }
+  function docxSdt(f, id, rPr) {
+    var pr = '<w:alias w:val="' + xmlEsc(f.label || f.name) + '"/><w:tag w:val="' + xmlEsc(f.name) + '"/><w:id w:val="' + id + '"/>' +
+             (f.readOnly ? '<w:lock w:val="sdtContentLocked"/>' : '');
+    if (f.input === 'checkbox') {
+      var mg = '<w:rFonts w:ascii="MS Gothic" w:eastAsia="MS Gothic" w:hAnsi="MS Gothic" w:cs="MS Gothic"/>';
+      var rp = rPr.replace(/<w:rFonts[^>]*\/>/, '').replace('<w:rPr>', '<w:rPr>' + mg);
+      return '<w:sdt><w:sdtPr>' + rp + pr + '<w14:checkbox><w14:checked w14:val="' + (f.checked ? 1 : 0) + '"/>' +
+             '<w14:checkedState w14:val="2612" w14:font="MS Gothic"/><w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/></w14:checkbox>' +
+             '</w:sdtPr><w:sdtContent><w:r>' + rp + '<w:t>' + (f.checked ? BOX_ON : BOX_OFF) + '</w:t></w:r></w:sdtContent></w:sdt>';
+    }
+    var empty = !f.value;
+    var shown = f.value || f.placeholder || (f.input === 'list' ? 'Elija un elemento.' : new Array(9).join('\u2002'));
+    var kind = f.input === 'list'
+      ? '<w:dropDownList>' + f.options.map(function (o) { return '<w:listItem w:displayText="' + xmlEsc(o) + '" w:value="' + xmlEsc(o) + '"/>'; }).join('') + '</w:dropDownList>'
+      : '<w:text' + (f.input === 'multiline' ? ' w:multiLine="1"' : '') + '/>';
+    var txt = String(shown).split(/\r?\n/).map(function (l) { return '<w:t xml:space="preserve">' + xmlEsc(l) + '</w:t>'; }).join('<w:br/>');
+    return '<w:sdt><w:sdtPr>' + rPr + pr + (empty ? '<w:showingPlcHdr/>' : '') + kind + '</w:sdtPr><w:sdtContent><w:r>' + rPr + txt + '</w:r></w:sdtContent></w:sdt>';
+  }
+  function docxProtection(xml, prot) {
+    xml = xml.replace(/<w:documentProtection[^>]*\/>/g, '');
+    if (!prot.protect) { return xml; }
+    var tag = '<w:documentProtection w:edit="forms" w:enforcement="1"';
+    if (prot.password) {
+      var salt = randBytes(16), spin = 100000;
+      tag += ' w:cryptProviderType="rsaAES" w:cryptAlgorithmClass="hash" w:cryptAlgorithmType="typeAny" w:cryptAlgorithmSid="14"' +
+             ' w:cryptSpinCount="' + spin + '" w:hash="' + toB64(wordHash(prot.password, salt, spin)) + '" w:salt="' + toB64(salt) + '"';
+    }
+    tag += '/>';
+    /* Orden del esquema: documentProtection va antes de evenAndOddHeaders / compat */
+    var at = ['<w:evenAndOddHeaders', '<w:compat', '</w:settings>'].map(function (k) { return xml.indexOf(k); }).filter(function (i) { return i >= 0; })[0];
+    return xml.substr(0, at) + tag + xml.substr(at);
+  }
+  /* Reemplaza los marcadores por controles de contenido y aplica la protección en settings.xml */
+  function docxForms(buf, fields, prot) {
+    if (prot.protect && prot.password) { wordHash(prot.password, new Uint8Array(16), 0); }   /* valida la contraseña antes de abrir el ZIP */
+    return window.JSZip.loadAsync(buf).then(function (z) {
+      return Promise.all([z.file('word/document.xml').async('string'), z.file('word/settings.xml').async('string')]).then(function (xs) {
+        var n = 0;
+        var re = new RegExp('<w:r>(<w:rPr>(?:(?!</w:rPr>)[\\s\\S])*</w:rPr>)?<w:t xml:space="preserve">' + FORM_MARK + '(\\d+)' + FORM_END + '</w:t></w:r>', 'g');
+        var doc = xs[0].replace(re, function (m, rPr, i) { n++; return docxSdt(fields[+i], 1000 + Number(i), rPr || '<w:rPr></w:rPr>'); });
+        if (n !== fields.length) { throw new Error('Word: no se pudieron colocar todos los campos del formulario (' + n + ' de ' + fields.length + ').'); }
+        z.file('word/document.xml', doc);
+        z.file('word/settings.xml', docxProtection(xs[1], prot));
+        return z.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      });
+    });
+  }
+  function renderDocx(layout, ctxs, opt) {
+    var D = window.docx, th = themeOf(layout), page = layout.page || {}, fields = [], formReg = formNames();
     var dims = PAGES_TW[page.size || 'letter'] || PAGES_TW.letter, land = page.orientation === 'landscape';
     var mg = Math.round((page.margin || 12.7) * 56.7), usable = (land ? dims[1] : dims[0]) - 2 * mg;
     var none = { style: D.BorderStyle.NONE, size: 0, color: 'FFFFFF' };
     var noB = { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none };
     var thin = { style: D.BorderStyle.SINGLE, size: 2, color: 'BFC9D4' };
     var gridB = { top: thin, bottom: thin, left: thin, right: thin, insideHorizontal: thin, insideVertical: thin };
+    function gridOf(color) {
+      if (!color) { return gridB; }
+      var b = { style: D.BorderStyle.SINGLE, size: 2, color: hexNo(color) };
+      return { top: b, bottom: b, left: b, right: b, insideHorizontal: b, insideVertical: b };
+    }
     var szT = Math.round((th.fontSize || 7) * 2);
 
     function run(text, o) {
@@ -1365,7 +1801,9 @@ window.novaReport = (function () {
     }
     function cell(text, o) {
       o = o || {};
-      return new D.TableCell({ children: [para(text, o)], columnSpan: o.span, margins: { top: 30, bottom: 30, left: 60, right: 60 },
+      var pv = o.pad !== undefined ? o.pad : 30;
+      return new D.TableCell({ children: [para(text, o)], columnSpan: o.span, margins: { top: pv, bottom: pv, left: 60, right: 60 },
+                               verticalAlign: o.middle ? D.VerticalAlign.CENTER : undefined,
                                shading: o.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(o.fill) } : undefined });
     }
     function spacer() { return new D.Paragraph({ children: [], spacing: { before: 60, after: 60 } }); }
@@ -1388,8 +1826,8 @@ window.novaReport = (function () {
                     behindDocument: true, allowOverlap: true, wrap: { type: D.TextWrappingType.NONE } } })] })] });
     }
 
-    var sections = ctxs.map(function (ctx) {
-      var kids = [];
+    var sections = ctxs.map(function (ctx, di) {
+      var kids = [], suffix = ctxs.length > 1 ? '_' + (di + 1) : '';
       sectionsFor(layout, 'docx', ctx).forEach(function drawSec(sec) {
         var t = sec.type;
         if (t === 'columnas') {
@@ -1465,13 +1903,82 @@ window.novaReport = (function () {
         } else if (t === 'ficha') {
           var fr = rowsOf(sec, ctx)[0] || {}, n = sec.columns || 3, trs = [], cur = [];
           (sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }).forEach(function (f) {
-            cur.push(cell(tpl(f.label, ctx, fr), { bold: true, size: 17 }), cell(fieldText(f, ctx, fr), { size: 17 }));
+            var gd = !!sec.grid, pv = gd ? 60 : undefined;
+            cur.push(cell(tpl(f.label, ctx, fr), { bold: true, size: 17, fill: sec.labelFill, color: sec.labelColor, pad: pv, middle: gd }),
+                     cell(fieldText(f, ctx, fr), { size: 17, color: sec.valueColor, pad: pv, middle: gd }));
             if (cur.length === n * 2) { trs.push(new D.TableRow({ children: cur })); cur = []; }
           });
           if (cur.length) { while (cur.length < n * 2) { cur.push(cell('')); } trs.push(new D.TableRow({ children: cur })); }
           if (trs.length) {
-            var cw = []; for (var i = 0; i < n * 2; i++) { cw.push(Math.round(usable / (n * 2))); }
-            kids.push(new D.Table({ rows: trs, width: { size: usable, type: D.WidthType.DXA }, columnWidths: cw, borders: noB }), spacer());
+            var cw = [];
+            if (sec.grid || Array.isArray(sec.labelWidths)) {
+              /* Etiquetas con su ancho en mm (como en PDF); los valores se reparten el resto */
+              var lws = [], lsum = 0;
+              for (var li = 0; li < n; li++) { lws.push(Math.round(labelW(sec, li) * 56.7)); lsum += lws[li]; }
+              var vwd = Math.max(600, Math.round((usable - lsum) / n));
+              for (li = 0; li < n; li++) { cw.push(lws[li], vwd); }
+            } else {
+              for (var i = 0; i < n * 2; i++) { cw.push(Math.round(usable / (n * 2))); }
+            }
+            kids.push(new D.Table({ rows: trs, width: { size: usable, type: D.WidthType.DXA }, columnWidths: cw,
+                                    borders: sec.grid ? gridOf(sec.borderColor || GRID_LINE) : noB,
+                                    layout: sec.grid ? D.TableLayoutType.FIXED : undefined }), spacer());
+          }
+        } else if (t === 'tarjetas') {
+          var kc = cardsOf(sec, ctx, th);
+          if (!kc.items.length) { return; }
+          var kgap = Math.round(kc.cardGap * 56.7), kcw = Math.floor((usable - kgap * (kc.n - 1)) / kc.n), krows = [], kws = [];
+          for (var kk = 0; kk < kc.n; kk++) { if (kk) { kws.push(kgap); } kws.push(kcw); }
+          var nb = { style: D.BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+          for (var ki = 0; ki < kc.items.length; ki += kc.n) {
+            var kcells = [];
+            for (var kj = 0; kj < kc.n; kj++) {
+              var it = kc.items[ki + kj];
+              if (kj) { kcells.push(new D.TableCell({ children: [para('')], borders: { top: nb, bottom: nb, left: nb, right: nb } })); }
+              if (!it) { kcells.push(new D.TableCell({ children: [para('')], borders: { top: nb, bottom: nb, left: nb, right: nb } })); continue; }
+              kcells.push(new D.TableCell({
+                children: [para(it.label, { size: kc.labelSize * 2, color: kc.labelColor }),
+                           new D.Paragraph({ children: [run(it.value, { bold: true, size: kc.size * 2, color: it.color || kc.valueColor })], spacing: { before: 40, after: 0 } })],
+                margins: { top: 100, bottom: 100, left: 160, right: 100 }, verticalAlign: D.VerticalAlign.CENTER,
+                shading: { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(kc.fill) },
+                borders: { top: nb, bottom: nb, right: nb,
+                           left: kc.accent ? { style: D.BorderStyle.SINGLE, size: 24, color: hexNo(kc.accent) } : nb } }));
+            }
+            if (krows.length) { krows.push(new D.TableRow({ height: { value: kgap, rule: D.HeightRule.EXACT }, children: kws.map(function () { return new D.TableCell({ children: [para('')], borders: { top: nb, bottom: nb, left: nb, right: nb } }); }) })); }
+            krows.push(new D.TableRow({ cantSplit: true, children: kcells }));
+          }
+          kids.push(new D.Table({ rows: krows, width: { size: usable, type: D.WidthType.DXA }, columnWidths: kws, borders: noB,
+                                  layout: D.TableLayoutType.FIXED }), spacer());
+        } else if (t === 'formulario') {
+          var nfd = sec.columns || 2, ftrs = [], fcells = [], flines = 1, ffd = formFields(sec, ctx, suffix);
+          var fb = { style: D.BorderStyle.SINGLE, size: 4, color: hexNo(FORM_LINE) };
+          var frow = function () {
+            ftrs.push(new D.TableRow({ children: fcells, cantSplit: true,
+              height: flines > 1 ? { value: Math.round(230 * flines + 120), rule: D.HeightRule.ATLEAST } : undefined }));
+            fcells = []; flines = 1;
+          };
+          ffd.forEach(function (f) {
+            formReg(f.name);
+            var idx = fields.length;
+            fields.push(f);
+            flines = Math.max(flines, f.lines);
+            var va = f.lines > 1 ? D.VerticalAlign.TOP : D.VerticalAlign.CENTER;
+            fcells.push(new D.TableCell({ children: [para(f.label, { bold: true, size: 17 })], verticalAlign: va,
+                                          margins: { top: 30, bottom: 30, left: 60, right: 60 } }),
+                        /* Marcador que se reemplaza por un control de contenido (w:sdt) al final */
+                        new D.TableCell({ children: [new D.Paragraph({ children: [run(FORM_MARK + idx + FORM_END, { size: 17 })], spacing: { before: 0, after: 0 } })],
+                                          verticalAlign: va, margins: { top: 40, bottom: 40, left: 60, right: 60 },
+                                          borders: { top: fb, bottom: fb, left: fb, right: fb },
+                                          shading: { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(FORM_FILL) } }));
+            if (fcells.length === nfd * 2) { frow(); }
+          });
+          if (fcells.length) { while (fcells.length < nfd * 2) { fcells.push(cell('')); } frow(); }
+          if (ftrs.length) {
+            var fcw = [], lw = Math.round((sec.labelWidth || 32) * 56.7), vw = Math.max(600, Math.round((usable - lw * nfd) / nfd));
+            if (lw * nfd + 600 * nfd > usable) { lw = vw = Math.round(usable / (nfd * 2)); }
+            for (var fk = 0; fk < nfd; fk++) { fcw.push(lw, vw); }
+            kids.push(new D.Table({ rows: ftrs, width: { size: usable, type: D.WidthType.DXA }, columnWidths: fcw, borders: noB,
+                                    layout: D.TableLayoutType.FIXED }), spacer());
           }
         } else if (t === 'alerta') {
           rowsOf(sec, ctx).filter(function (x) { return cond(sec.when, ctx, x); }).slice(0, sec.each ? 999 : 1).forEach(function (x) {
@@ -1490,15 +1997,15 @@ window.novaReport = (function () {
               return cell(g.label || '', { bold: true, color: th.headText, fill: th.primary, align: 'center', span: g.cols }); }) }));
           }
           trs2.push(new D.TableRow({ tableHeader: true, children: cols.map(function (c) {
-            return cell(c.label, { bold: true, color: th.headText, fill: th.primary, align: 'center' }); }) }));
+            return cell(c.label, { bold: true, color: th.headText, fill: th.primary, align: headAlignOf(c, sec) }); }) }));
           if (!rows.length) {
             trs2.push(new D.TableRow({ children: [cell(tpl(sec.emptyText, ctx), { italic: true, span: cols.length })] }));
           }
           var sset = subCols(sec);
           /* Fila(s) de totales: texto combinado hasta la primera columna con agregado */
           var wordAgg = function (ar) {
-            var lab = cell(ar.text, { bold: true, align: 'left', fill: th.totals, span: ar.at || cols.length });
-            var vals = ar.cells.slice(ar.at).map(function (t) { return cell(t, { bold: true, align: 'right', fill: th.totals }); });
+            var lab = cell(ar.text, { bold: true, align: 'left', fill: th.totals, span: ar.at || cols.length, color: sec.totalsColor });
+            var vals = ar.cells.slice(ar.at).map(function (t) { return cell(t, { bold: true, align: 'right', fill: th.totals, color: sec.totalsColor }); });
             return ar.at === 0 ? [new D.TableRow({ cantSplit: true, children: [lab] }), new D.TableRow({ cantSplit: true, children: vals })]
                                : [new D.TableRow({ cantSplit: true, children: [lab].concat(vals) })];
           };
@@ -1524,7 +2031,8 @@ window.novaReport = (function () {
           }
           var wts = cols.map(function (c) { return c.width ? c.width / 20 : 1; }), tw = wts.reduce(function (a, b) { return a + b; }, 0);
           var cws = wts.map(function (x) { return Math.floor(usable * x / tw); });
-          kids.push(new D.Table({ rows: trs2, width: { size: usable, type: D.WidthType.DXA }, columnWidths: cws, borders: gridB }), spacer());
+          kids.push(new D.Table({ rows: trs2, width: { size: usable, type: D.WidthType.DXA }, columnWidths: cws,
+                                  borders: sec.grid === false ? noB : gridOf(sec.grid ? (sec.borderColor || GRID_LINE) : null) }), spacer());
         }
       });
       var ft = layout.footer, wh = wmHeader(ctx);
@@ -1537,8 +2045,9 @@ window.novaReport = (function () {
       };
     });
     var d = new D.Document({ creator: 'novaReport', title: tpl(layout.title || '', ctxs[0] || { S: {}, T: {} }), sections: sections });
-    return D.Packer.toBlob ? D.Packer.toBlob(d).then(function (b) { return b.arrayBuffer ? b.arrayBuffer() : b; })
-                           : D.Packer.toBuffer(d);
+    var packed = D.Packer.toBlob ? D.Packer.toBlob(d).then(function (b) { return b.arrayBuffer ? b.arrayBuffer() : b; })
+                                 : D.Packer.toBuffer(d);
+    return fields.length ? packed.then(function (b) { return docxForms(b, fields, formProtect(layout, opt)); }) : packed;
   }
 
   /* ================================================================== WORD desde plantilla */
@@ -1707,8 +2216,8 @@ window.novaReport = (function () {
   }
   function renderOne(f, layout, ctxs, opt) {
     if (f === 'pdf') { return renderPdf(layout, ctxs, opt.hooks); }
-    if (f === 'xlsx') { return renderXlsx(layout, ctxs, ctxs.length > 1); }
-    if (f === 'docx') { return renderDocx(layout, ctxs); }
+    if (f === 'xlsx') { return renderXlsx(layout, ctxs, ctxs.length > 1, opt); }
+    if (f === 'docx') { return renderDocx(layout, ctxs, opt); }
     if (f === 'docx-template') {
       return getTemplate(opt.templateUrl).then(function (b) { return renderDocxTemplate(b, ctxs[0]); });
     }
@@ -1805,6 +2314,7 @@ window.novaReport = (function () {
         if (!s) { return; }
         if (s.type === 'codigo' && String(s.kind || 'qr').toLowerCase() === 'qr' && l.indexOf('qrcode') < 0) { l.push('qrcode'); }
         if (s.type === 'grafico' && l.indexOf('chartjs') < 0) { l.push('chartjs'); }
+        if (s.type === 'formulario' && l.indexOf('jszip') < 0) { l.push('jszip'); }   /* Word: controles de contenido */
         if (s.type === 'columnas') { (s.cols || []).forEach(scan); }
       });
     }
@@ -1866,7 +2376,8 @@ window.novaReport = (function () {
     if (!resolver) {
       try { layout = parseLayout(o.layout); } catch (e) { if (sp) { sp.remove(); } if (w) { w.close(); } alertMsg('Diseño inválido: ' + e.message); return Promise.reject(e); }
     }
-    var opt = { layout: layout, format: o.format, output: o.output, params: o.params || {}, templateUrl: o.templateUrl, hooks: o.hooks || {} };
+    var opt = { layout: layout, format: o.format, output: o.output, params: o.params || {}, templateUrl: o.templateUrl, hooks: o.hooks || {},
+                formPassword: o.formPassword };
     fire('start', { format: o.format, output: o.output, report: resolver ? o.report : undefined });
     var needZip = o.output !== 'merge';
     var libs = ensure(libsFor(formats, needZip).concat(resolver ? [] : layoutLibs(layout)));
@@ -1975,5 +2486,6 @@ window.novaReport = (function () {
 
   return { version: VERSION, libs: LIBS, run: run, da: da, build: build, ensure: ensure, layoutLibs: layoutLibs,
            _internals: { IMG: IMG, imgDims: imgDims, tpl: tpl, cond: cond, fmt: fmt, normalize: normalize, contexts: contexts,
-                         code128: code128, png1: png1, layoutLibs: layoutLibs } };
+                         code128: code128, png1: png1, layoutLibs: layoutLibs,
+                         sha512: sha512, wordLegacyKey: wordLegacyKey, wordHash: wordHash, formName: formName } };
 })();

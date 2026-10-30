@@ -90,6 +90,16 @@ data['08-factura-columnas'] = {
   ITEMS: { cols: [U('DOC_KEY'), N('DESCRIPCION'), U('CANTIDAD'), U('PRECIO'), U('IMPORTE')],
     rows: [[1, 'Consultoría Oracle APEX', 8, 120, 960], [1, 'Licencia novaReport (soporte anual)', 1, 324, 324]] },
   EMPRESA: { cols: [N('NOMBRE'), N('RUC'), N('DIRECCION')], rows: [['NovaCode, S.A.', '155771259-2-2025', 'Panamá Oeste, Arraiján']] } };
+/* 09: Cover Sheet (tarjetas, ficha en cuadrícula, tabla con headAlign/grid) */
+{ const T = o => ({ cols: Object.keys(o).map(k => typeof o[k] === 'number' ? U(k) : N(k)), rows: [Object.values(o)] });
+  data['09-cover-sheet'] = {
+    DOCS: T({ DOC_KEY: 1, COVER_NO: '16-26', FECHA: '15-Oct-26', PRESENTACION: 'Disminución de', CIF: 'CL-000003', STATUS: 'Approved',
+      DEUDOR: 'Ana Lucía Castillo Herrera', IDENTIFICACION: 'Cédula 4-721-889', DIRECCION: 'Urbanización Vista Alegre, calle 3, casa 45, Arraiján',
+      PAIS: 'Panamá', OFICINA: '1001 - Casa Matriz Panamá', CATEGORIA: 'Banca Personal', PARTE_RELACIONADA: 'N', OFICIAL: 'Héctor Iván Delgado',
+      TIPO_PRESTAMO: 'Comercial', ENVIADO_POR: 'ADMIN', RESUELTO_POR: 'CHECKER', COMENTARIO: 'Aprobada', IMPRESO: '28-Oct-26 20:56' }),
+    FACILIDAD: T({ MONEDA: 'NIO', MONTO: 5656656565, FORMA_PAGO: 'Capital e intereses al vencimiento' }),
+    GARANTIA: T({ TIPO: 'Fianza corporativa', DESCRIPCION: 'YYYYYY', MONEDA: 'USD', VALOR: 343444, COBERTURA: 50, AVALUO: '21-Oct-26' }),
+    FIRMAS: T({ F1_NOMBRE: 'Mónica Vega', F1_CARGO: 'Analista de Riesgo' }) }; }
 const runs = [['01-listado-empleados', 'pdf', 'file'], ['01-listado-empleados', 'xlsx', 'file'], ['01-listado-empleados', 'docx', 'file'],
   ['02-cartas-zip', 'pdf', 'zip'], ['02-cartas-zip', 'pdf', 'merge'], ['03-constancia-posicion-fija', 'pdf', 'file'],
   ['04-imagen-blob', 'pdf', 'zip'], ['04-imagen-blob', 'docx', 'zip'],
@@ -97,7 +107,8 @@ const runs = [['01-listado-empleados', 'pdf', 'file'], ['01-listado-empleados', 
   ['05-excel-multihoja', 'all', 'zip'],
   ['06-plantilla-word', 'docx-template', 'zip', '06-plantilla-word/plantilla.docx'],
   ['07-graficos-codigos', 'pdf', 'file'], ['07-graficos-codigos', 'xlsx', 'file'], ['07-graficos-codigos', 'docx', 'file'],
-  ['08-factura-columnas', 'pdf', 'file'], ['08-factura-columnas', 'xlsx', 'file'], ['08-factura-columnas', 'docx', 'file']];
+  ['08-factura-columnas', 'pdf', 'file'], ['08-factura-columnas', 'xlsx', 'file'], ['08-factura-columnas', 'docx', 'file'],
+  ['09-cover-sheet', 'pdf', 'file'], ['09-cover-sheet', 'xlsx', 'file'], ['09-cover-sheet', 'docx', 'file']];
 
 fs.mkdirSync(OUT, { recursive: true });
 (async () => {

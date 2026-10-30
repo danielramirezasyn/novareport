@@ -1,0 +1,560 @@
+{
+ "page": {
+  "size": "letter",
+  "margin": 12,
+  "font": "helvetica",
+  "theme": {
+   "primary": "#1F4E79",
+   "headText": "#FFFFFF",
+   "zebra": "#FFFFFF",
+   "totals": "#EEF2F7",
+   "muted": "#787878",
+   "fontSize": 8
+  }
+ },
+ "title": "Cover Sheet {DOC.COVER_NO}",
+ "fileName": "cover_{DOC.COVER_NO}",
+ "watermark": {
+  "text": "{DOC.STATUS}",
+  "when": "STATUS != 'Approved'"
+ },
+ "defs": {
+  "SUB": {
+   "type": "linea",
+   "width": 22,
+   "thickness": 0.8,
+   "color": "#4A90C2",
+   "gapBefore": 0,
+   "gap": 2
+  }
+ },
+ "sections": [
+  {
+   "type": "columnas",
+   "widths": [
+    55,
+    45
+   ],
+   "cols": [
+    [
+     {
+      "type": "texto",
+      "size": 16,
+      "bold": true,
+      "color": "#1F4E79",
+      "text": "Banco Ejemplo"
+     },
+     {
+      "type": "texto",
+      "size": 7,
+      "italic": true,
+      "color": "#1F4E79",
+      "text": "Grupo Financiero Ejemplo"
+     }
+    ],
+    [
+     {
+      "type": "texto",
+      "align": "right",
+      "size": 20,
+      "bold": true,
+      "color": "#1F4E79",
+      "text": "COVER SHEET"
+     },
+     {
+      "type": "texto",
+      "align": "right",
+      "size": 9,
+      "color": "#787878",
+      "text": "Credit presentation"
+     }
+    ]
+   ]
+  },
+  {
+   "type": "linea",
+   "thickness": 1.2,
+   "color": "#1F4E79",
+   "gap": 0.3
+  },
+  {
+   "type": "linea",
+   "thickness": 0.5,
+   "color": "#4A90C2",
+   "gap": 5
+  },
+  {
+   "type": "tarjetas",
+   "source": "DOCS",
+   "accent": "#4A90C2",
+   "fill": "#EEF2F7",
+   "size": 11,
+   "items": [
+    {
+     "label": "COVER NO.",
+     "value": "{COVER_NO}"
+    },
+    {
+     "label": "DATE",
+     "value": "{FECHA}"
+    },
+    {
+     "label": "PRESENTATION",
+     "value": "{PRESENTACION}"
+    },
+    {
+     "label": "CIF",
+     "value": "{CIF}"
+    },
+    {
+     "label": "STATUS",
+     "value": "{STATUS}"
+    }
+   ],
+   "gap": 6
+  },
+  {
+   "type": "texto",
+   "size": 11,
+   "bold": true,
+   "color": "#1F4E79",
+   "text": "Debtor information"
+  },
+  "@SUB",
+  {
+   "type": "ficha",
+   "source": "DOCS",
+   "columns": 2,
+   "labelWidths": [
+    40,
+    40
+   ],
+   "size": 8,
+   "grid": true,
+   "labelFill": "#EEF2F7",
+   "labelColor": "#1F4E79",
+   "fields": [
+    {
+     "label": "Applicant (DEBTOR)",
+     "value": "{DEUDOR}"
+    },
+    {
+     "label": "Country",
+     "value": "{PAIS}"
+    },
+    {
+     "label": "Debtor Identification",
+     "value": "{IDENTIFICACION}"
+    },
+    {
+     "label": "Office",
+     "value": "{OFICINA}"
+    },
+    {
+     "label": "Legal Rep.",
+     "value": "{REP_LEGAL}"
+    },
+    {
+     "label": "Geographic Area",
+     "value": "{AREA_GEO}"
+    },
+    {
+     "label": "Address Debtor",
+     "value": "{DIRECCION}"
+    },
+    {
+     "label": "% Country",
+     "value": "{PCT_PAIS}"
+    },
+    {
+     "label": "Contact",
+     "value": "{CONTACTO}"
+    },
+    {
+     "label": "% CEG",
+     "value": "{PCT_CEG}"
+    },
+    {
+     "label": "Economic Activity",
+     "value": "{ACT_ECONOMICA}"
+    },
+    {
+     "label": "% Client Exposure / Equity",
+     "value": "{PCT_EXPOSICION}"
+    },
+    {
+     "label": "Sub-Activity Eco.",
+     "value": "{SUB_ACTIVIDAD}"
+    },
+    {
+     "label": "$ Group Exposure",
+     "value": "{EXPOSICION_GRUPO}"
+    },
+    {
+     "label": "CIIU Code",
+     "value": "{CIIU}"
+    },
+    {
+     "label": "Economic Group",
+     "value": "{GRUPO_ECONOMICO}"
+    },
+    {
+     "label": "Portfolio",
+     "value": "{CARTERA}"
+    },
+    {
+     "label": "Related Party",
+     "value": "{PARTE_RELACIONADA}",
+     "map": {
+      "S": "Yes",
+      "N": "No"
+     }
+    },
+    {
+     "label": "Sub-Portfolio",
+     "value": "{SUB_CARTERA}"
+    },
+    {
+     "label": "Last Revision",
+     "value": "{ULTIMA_REVISION}"
+    },
+    {
+     "label": "Category",
+     "value": "{CATEGORIA}"
+    },
+    {
+     "label": "Relationship Officer",
+     "value": "{OFICIAL}"
+    }
+   ]
+  },
+  {
+   "type": "espacio",
+   "height": 3
+  },
+  {
+   "type": "texto",
+   "size": 11,
+   "bold": true,
+   "color": "#1F4E79",
+   "text": "Risk"
+  },
+  "@SUB",
+  {
+   "type": "ficha",
+   "source": "DOCS",
+   "columns": 2,
+   "labelWidths": [
+    40,
+    40
+   ],
+   "size": 8,
+   "grid": true,
+   "labelFill": "#EEF2F7",
+   "labelColor": "#1F4E79",
+   "fields": [
+    {
+     "label": "Ranking",
+     "value": "{RANKING}"
+    },
+    {
+     "label": "Loan Type",
+     "value": "{TIPO_PRESTAMO}"
+    },
+    {
+     "label": "Probability Default",
+     "value": "{PROB_DEFAULT}"
+    },
+    {
+     "label": "Environmental and Social Risk Category",
+     "value": "{RIESGO_AMB}"
+    },
+    {
+     "label": "Origination Rating",
+     "value": "{RATING_ORIGEN}"
+    }
+   ]
+  },
+  {
+   "type": "espacio",
+   "height": 3
+  },
+  {
+   "type": "texto",
+   "size": 11,
+   "bold": true,
+   "color": "#1F4E79",
+   "text": "Credit facility"
+  },
+  "@SUB",
+  {
+   "type": "tabla",
+   "source": "FACILIDAD",
+   "grid": true,
+   "headAlign": "left",
+   "zebra": false,
+   "size": 8,
+   "columns": [
+    {
+     "label": "Amount",
+     "value": "{MONEDA} {MONTO|money}",
+     "width": 45
+    },
+    {
+     "col": "PLAZO",
+     "label": "Term",
+     "width": 16,
+     "align": "left"
+    },
+    {
+     "col": "TASA",
+     "label": "Interest Rate",
+     "width": 30,
+     "align": "left"
+    },
+    {
+     "col": "FORMA_PAGO",
+     "label": "Payment",
+     "width": 65
+    },
+    {
+     "col": "DESEMBOLSO",
+     "label": "Est. Disbursement"
+    }
+   ]
+  },
+  {
+   "type": "texto",
+   "size": 11,
+   "bold": true,
+   "color": "#1F4E79",
+   "text": "Collateral"
+  },
+  "@SUB",
+  {
+   "type": "tabla",
+   "source": "GARANTIA",
+   "grid": true,
+   "headAlign": "left",
+   "zebra": false,
+   "size": 8,
+   "totalsColor": "#1F4E79",
+   "emptyText": "No collateral",
+   "columns": [
+    {
+     "col": "TIPO",
+     "label": "Type",
+     "width": 38
+    },
+    {
+     "col": "DESCRIPCION",
+     "label": "Description",
+     "width": 58
+    },
+    {
+     "col": "MONEDA",
+     "label": "Cur.",
+     "width": 14
+    },
+    {
+     "col": "VALOR",
+     "label": "Value",
+     "fmt": "money",
+     "width": 34,
+     "headAlign": "right"
+    },
+    {
+     "col": "COBERTURA",
+     "label": "Coverage",
+     "fmt": "pct",
+     "width": 22,
+     "headAlign": "right"
+    },
+    {
+     "col": "AVALUO",
+     "label": "Appraisal"
+    }
+   ],
+   "totals": [
+    "VALOR",
+    "COBERTURA"
+   ],
+   "totalsLabel": "Total / Coverage over amount"
+  },
+  {
+   "type": "salto",
+   "formats": [
+    "pdf",
+    "docx"
+   ]
+  },
+  {
+   "type": "texto",
+   "size": 11,
+   "bold": true,
+   "color": "#1F4E79",
+   "text": "Approval"
+  },
+  "@SUB",
+  {
+   "type": "ficha",
+   "source": "DOCS",
+   "columns": 2,
+   "labelWidths": [
+    32,
+    32
+   ],
+   "size": 8,
+   "grid": true,
+   "labelFill": "#EEF2F7",
+   "labelColor": "#1F4E79",
+   "fields": [
+    {
+     "label": "Submitted by",
+     "value": "{ENVIADO_POR}"
+    },
+    {
+     "label": "Submitted on",
+     "value": "{ENVIADO_EL}"
+    },
+    {
+     "label": "Resolved by",
+     "value": "{RESUELTO_POR}"
+    },
+    {
+     "label": "Resolved on",
+     "value": "{RESUELTO_EL}"
+    },
+    {
+     "label": "Comment",
+     "value": "{COMENTARIO}"
+    }
+   ]
+  },
+  {
+   "type": "espacio",
+   "height": 3
+  },
+  {
+   "type": "texto",
+   "size": 11,
+   "bold": true,
+   "color": "#1F4E79",
+   "text": "Signatures"
+  },
+  "@SUB",
+  {
+   "type": "espacio",
+   "height": 16
+  },
+  {
+   "type": "columnas",
+   "colGap": 10,
+   "gap": 4,
+   "cols": [
+    [
+     {
+      "type": "linea",
+      "thickness": 0.3,
+      "color": "#1F4E79",
+      "gap": 1
+     },
+     {
+      "type": "texto",
+      "align": "center",
+      "size": 9,
+      "text": "**{FIRMAS.F1_NOMBRE}**\n[c=#787878]{FIRMAS.F1_CARGO}[/c]"
+     }
+    ],
+    [
+     {
+      "type": "linea",
+      "thickness": 0.3,
+      "color": "#1F4E79",
+      "gap": 1
+     },
+     {
+      "type": "texto",
+      "align": "center",
+      "size": 9,
+      "text": "**{FIRMAS.F2_NOMBRE}**\n[c=#787878]{FIRMAS.F2_CARGO}[/c]"
+     }
+    ],
+    [
+     {
+      "type": "linea",
+      "thickness": 0.3,
+      "color": "#1F4E79",
+      "gap": 1
+     },
+     {
+      "type": "texto",
+      "align": "center",
+      "size": 9,
+      "text": "**{FIRMAS.F3_NOMBRE}**\n[c=#787878]{FIRMAS.F3_CARGO}[/c]"
+     }
+    ]
+   ]
+  },
+  {
+   "type": "espacio",
+   "height": 16
+  },
+  {
+   "type": "columnas",
+   "colGap": 10,
+   "cols": [
+    [
+     {
+      "type": "linea",
+      "thickness": 0.3,
+      "color": "#1F4E79",
+      "gap": 1
+     },
+     {
+      "type": "texto",
+      "align": "center",
+      "size": 9,
+      "text": "**{FIRMAS.F4_NOMBRE}**\n[c=#787878]{FIRMAS.F4_CARGO}[/c]"
+     }
+    ],
+    [
+     {
+      "type": "linea",
+      "thickness": 0.3,
+      "color": "#1F4E79",
+      "gap": 1
+     },
+     {
+      "type": "texto",
+      "align": "center",
+      "size": 9,
+      "text": "**{FIRMAS.F5_NOMBRE}**\n[c=#787878]{FIRMAS.F5_CARGO}[/c]"
+     }
+    ],
+    [
+     {
+      "type": "linea",
+      "thickness": 0.3,
+      "color": "#1F4E79",
+      "gap": 1
+     },
+     {
+      "type": "texto",
+      "align": "center",
+      "size": 9,
+      "text": "**{FIRMAS.F6_NOMBRE}**\n[c=#787878]{FIRMAS.F6_CARGO}[/c]"
+     }
+    ]
+   ]
+  }
+ ],
+ "footer": {
+  "left": "Banco Ejemplo, S.A.  -  Cover {DOC.COVER_NO}  -  Printed on {DOC.IMPRESO}",
+  "right": "Page {PAGE} of {PAGES}",
+  "size": 7
+ },
+ "xlsx": {
+  "sheetName": "Cover {DOC.COVER_NO}"
+ }
+}

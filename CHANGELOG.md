@@ -1,24 +1,15 @@
 # Cambios
 
+## 1.13.0
+- Sección **`tarjetas`**: etiqueta pequeña + valor destacado, fondo y barra de acento (`fields`, `columns`, `fill`, `accent`, `labelColor`, `valueColor`, `labelSize`, `size`, `height`, `cardGap`; `color` por tarjeta, fijo o según una columna). Los valores largos se parten en líneas. PDF, Excel y Word; también dentro de `columnas`.
+- `ficha`: **`grid`** (cuadrícula), `borderColor`, `labelFill`, `labelColor`, `valueColor` y **`labelWidths`** (ancho por etiqueta). Con `grid` o `labelWidths`, Word respeta los anchos de etiqueta en mm.
+- `tabla`: **`headAlign`** (tabla y columna: `left`, `center`, `right`, `auto`), **`grid`** (`true`: bordes en los tres formatos; `false`: Word también sin bordes), `borderColor` y `totalsColor`.
+- Sin cambios para diseños existentes: todas las propiedades nuevas son opcionales (los 37 archivos de prueba salen idénticos a 1.12.0).
+
 ## 1.12.0
-- Sección **`formulario`**: campos editables en el documento generado.
-  - Tipos (`input`): `text`, `multiline`, `list` y `checkbox`.
-  - `value` es una plantilla (`{COL}`) con `fmt` y `map`, igual que en `ficha`.
-  - Listas: opciones fijas (`options`) o desde una fuente (`optionsFrom: "FUENTE.COLUMNA"`; sin columna usa la primera). Si el valor inicial no está en las opciones, queda vacío.
-  - Casilla: la marcan `S`, `SI`, `SÍ`, `Y`, `YES`, `1`, `X`, `TRUE` u `ON`.
-  - Por campo: `maxLength` (recorta el valor inicial), `lines` (2 a 20, solo `multiline`), `readOnly`, `placeholder` y `when`.
-  - Sección: `source`, `columns` (defecto 2), `labelWidth` (32), `size` (8.5) y `when`. También va dentro de `columnas`.
-- Diseño: **`form`** con `protect` (defecto `true`) y `password`. La opción `formPassword` de `run` / *Initialization Code* tiene prioridad sobre `form.password`.
-- Validaciones:
-  - `name`: letras, números y `_` (hasta 40), sin parecer una celda de Excel (`A1`, `R1C1`).
-  - Nombres únicos por documento.
-  - Toda lista con `options` u `optionsFrom`.
-  - En salida unida (`merge`), los nombres llevan sufijo `_1`, `_2`…
-- Por formato:
-  - **PDF**: campos AcroForm (Helvetica, solo Latin-1) con el tamaño del primer formulario. La protección no cifra el archivo.
-  - **Excel**: celdas desbloqueadas con validación de lista, de largo y de casilla (☐/☒); hoja protegida, con contraseña opcional. Con `columns: 1` el valor no se combina a lo ancho.
-  - **Word**: controles de contenido (texto, lista desplegable y casilla) y protección "solo formularios", con contraseña opcional. `maxLength` no aplica; `placeholder` solo se ve en Word.
-- **APEX 23.2**: variante del plugin en `plugin/apex-23.2/`, con las mismas funciones. Se genera desde el export 26.1 con `plugin/to_apex232.py`: render de la API v1 (`javascript_function` + `attribute_NN`), sin `p_apexlang_name` ni `p_static_id`. Conserva los IDs, así que reemplaza el plugin existente y las acciones mantienen su configuración.
+- Sección **`formulario`**: campos editables `text`, `multiline`, `list` (`options`, `optionsFrom`) y `checkbox`, con `maxLength`, `lines`, `placeholder`, `readOnly` y `when`. PDF: AcroForm. Word: controles de contenido. Excel: celdas con nombre y validación de datos.
+- `form.protect` / `form.password` (y `run({ formPassword })`): Word protegido *solo formularios* (hash SHA-512 con sal) y hojas de Excel protegidas con las celdas de los campos desbloqueadas.
+- Nombres de campo validados (formato y repetidos); en salida unida se agrega `_1`, `_2`… por documento.
 
 ## 1.11.0
 - Sección **`columnas`**: 1 a 3 casillas lado a lado (`cols`, `widths`, `colGap`), cada una con sus secciones (ficha, texto, imagen, código, alerta, línea, tabla, gráfico, espacio). PDF: franjas; la fila no se parte entre páginas. Word: tabla sin bordes. Excel: bloques de columnas.
@@ -40,6 +31,7 @@
 ## 1.8.0
 - Plugin: atributo **Origen** (`attributes` | `resolver`) y **Función resolver**. En `resolver` el navegador solo envía ID + parámetros; una función PL/SQL valida rol y parámetros y devuelve fuentes + diseño. Nunca se acepta SQL del navegador. Los binds se enlazan con tipo (NUMBER, DATE) y sin enlace automático de ítems. Ver `docs/API.md` §3.1.
 - Plugin: el *Initialization Code* puede devolver `false` para cancelar; `data-report` en el elemento indica el reporte.
+- `plugin/build_plugin.py`: regenera el export del plugin desde `src/plugin.plsql` y `src/novareport.min.js` (`--app N` genera el script de instalación para esa aplicación).
 
 ## 1.7.0
 - Nueva sección `grafico`: barras, barras horizontales, líneas, área, circular y anillo (Chart.js 4.4.9), con valores o porcentajes sobre el gráfico (el eje deja margen para las etiquetas). PDF, Excel y Word.

@@ -15,12 +15,12 @@ Incluya:
 
 | Archivo | Qué contiene |
 |---|---|
-| `src/novareport.js` | Motor completo: carga de librerías, plantillas, condiciones, PDF, Excel, Word, formularios, plantillas Word, lotes y punto de entrada de la Acción Dinámica. |
+| `src/novareport.js` | Motor completo: carga de librerías, plantillas, condiciones, PDF, Excel, Word, plantillas Word, lotes y punto de entrada de la Acción Dinámica. |
 | `src/novareport.min.js` | Versión minificada; es la que va dentro del plugin. |
 | `src/plugin.plsql` | Código PL/SQL del plugin: `render` (pasa la configuración al navegador) y `ajax` (ejecuta las fuentes y devuelve JSON). |
 | `plugin/dynamic_action_plugin_com_novacode_novareport.sql` | Export de APEX 26.1 listo para importar. |
-| `plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql` | Variante para APEX 23.2 – 24.x. No se edita a mano: se genera con `plugin/to_apex232.py`. |
-| `plugin/to_apex232.py` | Convierte el export 26.1 a 23.2: header, `attributes.get_varchar2` → `attribute_NN`, `render` de la API v1, sin `p_apexlang_name` ni `p_static_id`. El JavaScript no cambia. |
+| `plugin/apex-23.2/` | Variante del export para APEX 23.2 (mismo JavaScript). |
+| `plugin/build_plugin.py` | Regenera el export con `src/plugin.plsql`, `src/novareport.min.js` y la versión de `src/novareport.js`. |
 
 ## Flujo de trabajo
 
@@ -46,40 +46,27 @@ Incluya:
 
 ## Publicar una versión
 
-1. En una aplicación APEX 26.1 de desarrollo, en el plugin **COM.NOVACODE.NOVAREPORT**:
-   - reemplace el archivo `novareport.js` en *Files* por `src/novareport.min.js` (con el nombre `novareport.js`);
-   - pegue `src/plugin.plsql` en *PL/SQL Code* si cambió;
-   - cambie *Version* a la nueva versión.
-2. Exporte el plugin y reemplace `plugin/dynamic_action_plugin_com_novacode_novareport.sql`.
-3. Genere la variante 23.2. `--ids-from` toma los IDs del export 23.2 anterior, para que la importación reemplace el plugin y las acciones conserven su configuración:
+1. Regenere el export (toma el PL/SQL, el minificado y la versión; sube `p_files_version` si cambió el JS):
 
    ```bash
-   python3 plugin/to_apex232.py \
-     plugin/dynamic_action_plugin_com_novacode_novareport.sql \
-     plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql \
-     --ids-from plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql
+   python3 plugin/build_plugin.py                 # actualiza plugin/dynamic_action_plugin_com_novacode_novareport.sql
+   python3 plugin/build_plugin.py --app 118       # además genera test/out/deploy/118_plugin.sql para instalarlo en esa app
    ```
 
-   Si cambió el `render` o se agregó un atributo, revise el script antes de publicar: el `render` 23.2 está escrito en él y cada atributo se mapea por su secuencia.
-4. Verifique que los dos exports llevan el minificado (cada uno debe imprimir `OK`):
+2. Actualice la variante de APEX 23.2 (`plugin/apex-23.2/`) con el mismo `novareport.min.js`, la versión y `p_files_version`. `plugin/to_apex232.py` genera una variante nueva desde el export 26.1 si cambian los atributos del plugin.
+3. Verifique que el archivo exportado coincide con el minificado (debe imprimir `OK`):
 
    ```bash
    python3 - <<'PY'
    import re
-   js = open('src/novareport.min.js', 'rb').read()
-   for f in ['plugin/dynamic_action_plugin_com_novacode_novareport.sql',
-             'plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql']:
-       s = open(f, encoding='utf-8').read()
-       h = ''.join(re.findall(r"g_varchar2_table\(\d+\) := '([0-9A-F]+)'", s))
-       print('OK' if bytes.fromhex(h) == js else 'DIFERENTE', f)
+   s = open('plugin/dynamic_action_plugin_com_novacode_novareport.sql', encoding='utf-8').read()
+   h = ''.join(re.findall(r"g_varchar2_table\(\d+\) := '([0-9A-F]+)'", s))
+   print('OK' if bytes.fromhex(h) == open('src/novareport.min.js', 'rb').read() else 'DIFERENTE')
    PY
    ```
-
-5. Si puede, importe cada export en su versión de APEX (26.1 y 23.2) y genere un reporte en PDF, Excel y Word.
 
 ## Estilo
 
 - JavaScript ES5 compatible con el navegador, sin dependencias en tiempo de ejecución más allá de las librerías listadas en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - Mensajes al usuario en español.
 - Las propiedades del diseño se mantienen compatibles hacia atrás: una propiedad nueva siempre tiene un valor por defecto que conserva el comportamiento anterior.
-- Nada que dependa de APIs exclusivas de APEX 24.2+ en `src/novareport.js`: el mismo JavaScript corre en las dos variantes.

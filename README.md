@@ -1,7 +1,7 @@
 # novaReport — PDF, Excel y Word para Oracle APEX
 
-[![Versión](https://img.shields.io/badge/versión-1.12.0-1F4E79)](CHANGELOG.md)
-[![APEX](https://img.shields.io/badge/Oracle%20APEX-23.2%2B-C74634)](#requisitos)
+[![Versión](https://img.shields.io/badge/versión-1.13.0-1F4E79)](CHANGELOG.md)
+[![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requisitos)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green)](LICENSE)
 
 > 🇺🇸 [Read in English](README.en.md)
@@ -35,7 +35,8 @@ El servidor solo ejecuta las consultas; el documento se arma en el navegador con
 | **Un diseño, tres formatos** | El mismo JSON produce PDF, Excel (`.xlsx` con colores, totales con `=SUM()`, autofiltro, varias hojas) y Word (`.docx` editable). |
 | **Lotes** | Un archivo por documento dentro de un **ZIP**, con un documento de **resumen** opcional; o todos los documentos **unidos en un solo archivo**. |
 | **Diseño declarativo** | Encabezado, ficha de datos, tablas con totales (suma, promedio, mínimo, máximo, conteo), quiebres con subtotales, encabezados agrupados y estilos condicionales, alertas, texto enriquecido (negrita, cursiva, subrayado, tachado, colores, 3 letras), imágenes (URL o **BLOB**), gráficos, **QR** y **Code 128**, marca de agua, líneas y elementos en **posición fija**. |
-| **Formularios editables** | Campos que se llenan en el archivo generado: texto, texto de varias líneas, lista y casilla, con valor inicial desde el SQL, solo lectura y documento protegido (con contraseña en Excel y Word). PDF con AcroForm, Excel con validación de datos y Word con controles de contenido. |
+| **Tarjetas y cuadrículas** | **Tarjetas** de resumen (etiqueta + valor destacado), fichas en **cuadrícula** con etiquetas coloreadas y tablas con bordes y encabezado alineado a la izquierda o la derecha, iguales en los tres formatos. |
+| **Formularios editables** | Campos de texto, lista y casilla que el destinatario llena: AcroForm en PDF, controles de contenido en Word (protección *solo formularios* con contraseña) y celdas con validación en Excel (hoja protegida). |
 | **Columnas** | Casillas **lado a lado** (logo y datos, cliente y totales, firmas) que se ven igual en PDF y Word, y como bloques de columnas en Excel. |
 | **Lógica en el diseño** | Secciones y columnas que aparecen **según condiciones** (`when`), montos **en letras** (`MIL DOSCIENTOS BALBOAS CON 50/100`) y formatos de valor. |
 | **Guardar en el servidor** | Además de entregarlo, sube el archivo generado a un proceso de su aplicación para **archivarlo, enviarlo por correo o registrar la ejecución**. |
@@ -46,20 +47,13 @@ El servidor solo ejecuta las consultas; el documento se arma en el navegador con
 
 ## Requisitos
 
-- **Oracle APEX 26.1** o superior (API de plugins v2), o **APEX 23.2 – 24.x** con la variante de [`plugin/apex-23.2/`](plugin/apex-23.2).
+- **Oracle APEX 26.1** o superior (API de plugins v2). Para **APEX 23.2** use la variante [`plugin/apex-23.2/`](plugin/apex-23.2); el motor JavaScript es el mismo.
 - Navegador moderno (Chrome, Edge, Firefox, Safari).
 - Salida a `cdnjs.cloudflare.com` y `cdn.jsdelivr.net`, o las librerías servidas desde la aplicación ([cómo](docs/API.md#librerías-locales-sin-internet)).
 
 ## Instalación
 
-1. Descargue el export que corresponde a su versión de APEX:
-
-   | APEX | Archivo |
-   |---|---|
-   | 26.1 o superior | [`plugin/dynamic_action_plugin_com_novacode_novareport.sql`](plugin/dynamic_action_plugin_com_novacode_novareport.sql) |
-   | 23.2 – 24.x | [`plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql`](plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql) |
-
-   Los dos tienen las mismas funciones y el mismo JavaScript; solo cambia cómo APEX le pasa la configuración al navegador.
+1. Descargue [`plugin/dynamic_action_plugin_com_novacode_novareport.sql`](plugin/dynamic_action_plugin_com_novacode_novareport.sql) (APEX 23.2: [`plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql`](plugin/apex-23.2/dynamic_action_plugin_com_novacode_novareport.sql)).
 2. En su aplicación: **Shared Components → Plug-ins → Import**, seleccione el archivo y confirme.
 3. En cualquier Acción Dinámica aparecerá la acción **NovaCode Report (PDF / Excel / Word)**.
 
@@ -135,21 +129,6 @@ select h.empno doc_key, h.fecha, h.cargo from historial h
 
 Con salida **ZIP** obtiene un archivo por empleado; con **Un solo archivo**, todos en un PDF. Ver [API.md §4](docs/API.md#4-documentos-docs-y-doc_key).
 
-### Formularios editables
-
-La sección `formulario` deja campos que el usuario llena en el PDF, Excel o Word generado. Los valores iniciales salen del SQL; `optionsFrom` arma la lista desde otra fuente.
-
-```json
-{ "type": "formulario", "source": "DOCS", "columns": 2, "fields": [
-  { "label": "Nombre",       "name": "nombre", "value": "{ENAME}", "maxLength": 30 },
-  { "label": "Departamento", "name": "depto",  "input": "list", "value": "{DNAME}", "optionsFrom": "DEPTOS.DNAME" },
-  { "label": "Salario",      "name": "salario", "value": "{SAL}", "fmt": "money", "readOnly": true },
-  { "label": "Conforme",     "name": "conforme", "input": "checkbox", "value": "S" },
-  { "label": "Observaciones", "name": "obs", "input": "multiline", "lines": 4 } ] }
-```
-
-Tipos: `text`, `multiline`, `list` y `checkbox`. El documento queda protegido por defecto (`"form": { "protect": true, "password": "" }` en el diseño). Todas las propiedades en [DISENO.md](docs/DISENO.md).
-
 ### Parámetros desde el elemento: `data-*`
 
 ```html
@@ -173,8 +152,6 @@ Tipos: `text`, `multiline`, `list` y `checkbox`. El documento queda protegido po
 
 | Atributo | Para qué |
 |---|---|
-| **Origen** | **Atributos**: fuentes y diseño en esta acción. **Resolver**: una función PL/SQL los devuelve por ID de reporte; el navegador solo envía el ID y los parámetros. |
-| **Función resolver** | Con Origen = Resolver: `f(p_id in varchar2, p_params in clob) return clob`. Ver [API.md §3.1](docs/API.md). |
 | **Fuentes SQL** | Las consultas (`--@NOMBRE`). |
 | **Diseño (JSON)** | El diseño, o el nombre de una variable JS global si pasa de 4000 caracteres (`misDisenos.carta`). |
 | **Formato** | `pdf`, `xlsx`, `docx`, `docx-template`, `all`. |
@@ -183,11 +160,11 @@ Tipos: `text`, `multiline`, `list` y `checkbox`. El documento queda protegido po
 | **PDF de un documento** | Abrir en pestaña nueva o descargar. |
 | **Plantilla Word (URL)** | `.docx` para `docx-template`. |
 | **Mensaje de espera** | Texto mientras se consulta. |
-| *Initialization JavaScript Code* | Ajustar opciones antes de ejecutar (formato elegido en pantalla, parámetros extra, `formPassword`, *hooks*). |
+| *Initialization JavaScript Code* | Ajustar opciones antes de ejecutar (formato elegido en pantalla, parámetros extra, *hooks*). |
 
 ## Ejemplos
 
-En [`examples/`](examples) hay ocho ejemplos listos para copiar (del 01 al 07 con EMP / DEPT):
+En [`examples/`](examples) hay nueve ejemplos listos para copiar (del 01 al 07 con EMP / DEPT; 08 y 09 solo con `DUAL`):
 
 | Ejemplo | Qué muestra |
 |---|---|
@@ -199,6 +176,7 @@ En [`examples/`](examples) hay ocho ejemplos listos para copiar (del 01 al 07 co
 | [06 · Plantilla Word](examples/06-plantilla-word) | Un `.docx` hecho en Word con marcadores y una fila de tabla que se repite. |
 | [07 · Gráficos y códigos](examples/07-graficos-codigos) | Gráfico de barras y de anillo, tabla con quiebres y subtotales, QR, Code 128 y marca de agua condicional. |
 | [08 · Factura con columnas](examples/08-factura-columnas) | Cliente y código de barras lado a lado, monto en letras junto a los totales y dos firmas en la misma línea. |
+| [09 · Cover Sheet de crédito](examples/09-cover-sheet) | Tarjetas de resumen, fichas en cuadrícula, tablas con bordes y encabezado a la izquierda, totales en color y firmas. |
 
 Cada carpeta trae `fuentes.sql` (atributo **Fuentes SQL**) y `diseno.json` (atributo **Diseño**). Guía paso a paso en [examples/README.md](examples/README.md).
 
@@ -227,8 +205,7 @@ Requiere Node 18 o superior.
 ## Estructura del repositorio
 
 ```
-plugin/      Export del plugin para APEX 26.1+, apex-23.2/ (variante para APEX 23.2 – 24.x)
-             y to_apex232.py (genera la variante 23.2 desde el export 26.1)
+plugin/      Export del plugin, listo para importar en APEX (apex-23.2/: variante para APEX 23.2; build_plugin.py: regenera el export)
 src/         novareport.js (motor), novareport.min.js (versión publicada) y plugin.plsql (render / ajax)
 examples/    00-tablas-emp-dept.sql y ejemplos con EMP / DEPT: fuentes.sql + diseno.json (+ logo y plantilla)
 docs/        API.md y DISENO.md
@@ -240,8 +217,6 @@ test/        Prueba en Node que genera todos los ejemplos sin APEX
 - Las **consultas se ejecutan en el servidor**; su texto nunca llega al navegador.
 - Los valores **`data-*` vienen del navegador y el usuario puede cambiarlos**. Cada consulta debe validar el acceso, por ejemplo filtrando por `:APP_USER` o por ítems de sesión protegidos.
 - Un `data-*` no puede reemplazar un ítem de APEX con el mismo nombre: el ítem siempre toma el valor de sesión.
-- Con Origen **Resolver** el navegador no envía SQL ni diseño: solo el ID del reporte y los parámetros, que valida su función PL/SQL.
-- `form.password` queda en el diseño en texto plano. Si la contraseña es sensible, pásela con `formPassword` desde el *Initialization Code*.
 - Detalle en [API.md §13](docs/API.md#13-seguridad).
 
 ## Problemas conocidos y limitaciones
@@ -251,11 +226,12 @@ test/        Prueba en Node que genera todos los ejemplos sin APEX
 | **Ítems a enviar** (1.6.1 a 1.10.0) | El valor del atributo (`P5_A,P5_B`) se pasaba como selector jQuery y los ítems no se enviaban. | Corregido en 1.11.0. En versiones anteriores: `function (o) { if (o.items) { o.items = o.items.split(','); } return o; }` |
 | **Plantilla Word (URL)** (1.6.1 a 1.10.0) | No reemplazaba `#APP_FILES#`. | Corregido en 1.11.0. En versiones anteriores: `function (o) { o.templateUrl = apex.env.APP_FILES + 'plantillas/carta.docx'; return o; }` |
 | Letras del PDF | Helvetica, Times y Courier no incluyen algunos símbolos, como **₡**. | Pendiente: soporte de fuentes TTF. |
-| Formularios | PDF: los campos usan Helvetica, solo Latin-1 (**€** sale mal), y la protección no cifra el archivo. La contraseña aplica solo en Excel y Word. `maxLength` no aplica en Word; `placeholder` solo se ve en Word. | |
 | Fechas | Las columnas `DATE` viajan como `DD/MM/YYYY`, sin hora. | `to_char(fecha, 'DD/MM/YYYY HH24:MI')` |
 | Posición fija | `x` / `y` solo aplican al PDF, en la página donde se dibujan. | |
+| Formularios en PDF | La protección no se cifra y todos los campos usan Helvetica con el tamaño del primer formulario. | Para un formulario protegido con contraseña use Word o Excel. |
+| Contraseña de Word | De 1 a 15 caracteres ASCII (sin tildes ni ñ). | |
 | Tamaño | Máximo 250,000 filas por petición; el lote y el ZIP se arman en memoria del navegador. | Divida lotes muy grandes. |
-| Atributos | 4000 caracteres por atributo (límite de APEX para las acciones dinámicas), también en **Fuentes SQL**. | Diseño compacto (sin espacios) o en una variable JavaScript global. Para fuentes y diseño sin límite, Origen **Resolver**. |
+| Atributos | 4000 caracteres. | Diseño en una variable JavaScript global. |
 
 ## novaReport Designer
 

@@ -232,7 +232,7 @@ El archivo `novareport.js` define el objeto global `window.novaReport`.
 | `build(opciones, datos)` | `Promise<Resultado>` | Solo genera: sin AJAX, sin UI, sin descargar. Para pruebas o integraciones propias. |
 | `da(config)` | `void` | Punto de entrada que APEX llama desde la Acción Dinámica. No lo invoque directamente. |
 | `ensure(nombres)` | `Promise` | Carga librerías por nombre: `novaReport.ensure(['exceljs'])`. |
-| `libs` | `object` | Catálogo de librerías: `{ jspdf, autotable, exceljs, jszip, docx, pizzip, docxtemplater }`, cada una con `url` y `ok()`. |
+| `libs` | `object` | Catálogo de librerías: `{ jspdf, autotable, exceljs, jszip, docx, pizzip, docxtemplater, qrcode, chartjs }`, cada una con `url` y `ok()`. |
 | `_internals` | `object` | Funciones internas expuestas para pruebas (`tpl`, `cond`, `fmt`, `normalize`, `contexts`…). **No es API estable.** |
 
 ### `novaReport.run(opciones)`
@@ -269,6 +269,7 @@ novaReport.run({
 | `message` | string | `Consultando datos…` | Texto de la pantalla de espera. |
 | `loader` | boolean | `true` | Pantalla de espera en pestaña nueva (solo PDF de un documento con `open`). |
 | `hooks` | object | `{}` | Hoy existe `pdfCell` (ver abajo). |
+| `formPassword` | string | — | Contraseña de la protección de las secciones `formulario` (Word y Excel). Tiene prioridad sobre `form.password` del diseño. |
 | `save` | object | — | Guardar en el servidor: `{ process, mode }`. Tiene prioridad sobre `save` del diseño. Ver [DISENO.md](DISENO.md#guardar-en-el-servidor). |
 | `transform` | function | — | Recibe los datos crudos del servidor ([§10](#10-protocolo-ajax)) y puede devolver otros. |
 | `data` | object | — | Datos en el formato del [§10](#10-protocolo-ajax). Si se pasa, no se llama al servidor. |
@@ -337,7 +338,8 @@ En estas rutas sí se resuelven `#APP_FILES#`, `#WORKSPACE_FILES#` e `#IMAGE_PRE
 | `xlsx` | `exceljs` |
 | `docx` | `docx` |
 | `docx-template` | `pizzip`, `docxtemplater` |
-| ZIP | `jszip` (se carga salvo en `merge`) |
+| ZIP | `jszip` (se carga salvo en `merge`; también para secciones `formulario` en Word) |
+| Diseño | `qrcode` (sección `codigo` QR) y `chartjs` (sección `grafico`), solo si el diseño los usa |
 
 ## 8. Código de inicialización
 

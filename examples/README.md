@@ -21,6 +21,7 @@ Todos se pueden generar sin APEX con `cd test && npm install && npm test` (ver [
 | 06 | [Plantilla Word](#06--plantilla-word) | Word desde plantilla · ZIP o Archivo | `docx-template`, bucle en fila de tabla |
 | 07 | [Gráficos y códigos](#07--gráficos-y-códigos) | PDF / Excel / Word · Archivo | `grafico`, `codigo` (QR y Code 128), `breakBy` con subtotales, `watermark` |
 | 08 | [Factura con columnas](#08--factura-con-columnas) | PDF / Excel / Word · Archivo | `columnas`, `fmt: letras`, `when` en una sección |
+| 09 | [Cover Sheet de crédito](#09--cover-sheet-de-crédito) | PDF / Excel / Word · Archivo | `tarjetas`, `ficha` con `grid`, `tabla` con `headAlign` / `grid` / `totalsColor` |
 
 ---
 
@@ -244,4 +245,22 @@ Factura con las secciones de la versión 1.11.0. Usa solo `DUAL`: no necesita EM
 | Firmas opcionales | `"when": "PARAM.FIRMAS != 'N'"` en la fila de firmas: un botón con `data-firmas="N"` las quita |
 
 **Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**. PDF y Word se ven iguales; en Excel cada casilla ocupa su propio bloque de columnas.
+
+---
+
+## 09 · Cover Sheet de crédito
+
+[`09-cover-sheet`](09-cover-sheet)
+
+Portada de una presentación de crédito con las secciones de la versión 1.13.0. Usa solo `DUAL`.
+
+| Qué | Cómo |
+|---|---|
+| Resumen arriba (número, fecha, estado…) | `tarjetas` con `accent` y `fill` |
+| Datos del deudor y riesgo en cuadrícula | `ficha` con `grid`, `labelFill`, `labelColor` y `labelWidths` |
+| Tablas con encabezado a la izquierda y bordes | `tabla` con `headAlign: "left"`, `grid: true`; `headAlign: "right"` en las columnas numéricas |
+| Totales de garantías en el color de la marca | `totalsColor` |
+| Marca de agua si no está aprobada | `watermark` con `when: "STATUS != 'Approved'"` |
+
+**Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**.
 

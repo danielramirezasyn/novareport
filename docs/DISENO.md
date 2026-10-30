@@ -7,7 +7,7 @@ El diseño describe **qué** se dibuja; las [fuentes SQL](API.md#3-fuentes-sql) 
 - [Formatos de valor](#formatos-de-valor)
 - [Condiciones](#condiciones)
 - [Marca de agua](#marca-de-agua)
-- [Secciones](#secciones): [header](#header) · [ficha](#ficha) · [tabla](#tabla) · [alerta](#alerta) · [texto](#texto) · [imagen](#imagen) · [grafico](#grafico) · [codigo](#codigo) · [linea](#linea) · [espacio y salto](#espacio-y-salto)
+- [Secciones](#secciones): [header](#header) · [tarjetas](#tarjetas) · [ficha](#ficha) · [tabla](#tabla) · [alerta](#alerta) · [texto](#texto) · [imagen](#imagen) · [grafico](#grafico) · [codigo](#codigo) · [formulario](#formulario) · [linea](#linea) · [columnas](#columnas) · [espacio y salto](#espacio-y-salto)
 - [Qué soporta cada formato](#qué-soporta-cada-formato)
 - [Excel: hojas](#excel-hojas)
 - [Lotes y resumen](#lotes-y-resumen)
@@ -176,6 +176,35 @@ Banda de color con título.
 | `right` | — | Texto a la derecha. En Excel se une al subtítulo con ` \| `. |
 | `size` | `14` | Tamaño del título (PDF). |
 
+### `tarjetas`
+
+Fila de tarjetas con una **etiqueta pequeña** y un **valor destacado**, fondo suave y barra de acento a la izquierda. Sirve para el resumen al inicio de un documento (número, fecha, estado…). Los valores se toman de la primera fila de `source` (o del documento).
+
+```json
+{ "type": "tarjetas", "source": "DOCS", "accent": "#4A90C2", "fields": [
+  { "label": "COVER NO.", "value": "{COVER_NO}" },
+  { "label": "DATE",      "value": "{FECHA}", "fmt": "date" },
+  { "label": "STATUS",    "value": "{STATUS}", "color": { "by": "STATUS", "values": { "Rejected": "#AA1E1E" } } } ] }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `fields` | — | Tarjetas, en orden (también se acepta `items`). Mismas propiedades que los campos de [`ficha`](#ficha) (`label`, `value`, `fmt`, `map`, `when`) y además `color`: color del valor, fijo o según una columna (`{ "by", "values", "default" }`, como en [`alerta`](#alerta)). |
+| `columns` | todas (máx. 6) | Tarjetas por fila. Si hay más, continúan en filas nuevas. |
+| `fill` | `#F1F4F2` | Fondo. |
+| `accent` | `theme.primary` | Barra de acento a la izquierda. `""`: sin barra. |
+| `labelColor` | `#787878` | Color de la etiqueta. |
+| `valueColor` | `theme.primary` | Color del valor. |
+| `labelSize` / `size` | `7` / `11` | Tamaño de la etiqueta y del valor (pt). |
+| `height` | automático | Alto mínimo en mm (PDF). Un valor largo se parte en varias líneas y la fila crece. |
+| `cardGap` | `3` | Separación entre tarjetas en mm. |
+| `gap` | `3` | Espacio después en mm (PDF). |
+
+- **PDF:** rectángulos con la barra de acento; la fila no se parte entre páginas.
+- **Word:** tabla de ancho fijo; cada tarjeta es una celda con fondo y borde izquierdo grueso; columnas vacías entre tarjetas.
+- **Excel:** una columna por tarjeta; etiqueta en una fila y valor en la siguiente, con fondo y borde izquierdo grueso.
+- Admitida dentro de [`columnas`](#columnas).
+
 ### `ficha`
 
 Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source` (o del documento si no hay `source`).
@@ -193,8 +222,13 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
 | Propiedad | Defecto | Descripción |
 |---|---|---|
 | `columns` | `3` | Pares por fila. |
-| `labelWidth` | `32` | Ancho de la etiqueta en mm (PDF). |
+| `labelWidth` | `32` | Ancho de la etiqueta en mm (PDF; en Word con `grid` o `labelWidths`). |
+| `labelWidths` | — | Ancho de cada etiqueta de la fila, en mm: `[40, 45]`. Las que falten usan `labelWidth`. |
 | `size` | `8.5` | Tamaño de letra (PDF). |
+| `grid` | `false` | Cuadrícula: bordes finos en todas las celdas, más espacio interior y texto centrado en vertical. PDF, Excel y Word. |
+| `borderColor` | `#D5DCE3` | Color de los bordes con `grid`. |
+| `labelFill` | — | Fondo de las celdas de etiqueta. |
+| `labelColor` / `valueColor` | — | Color del texto de etiquetas / valores. |
 | `fields[].label` | — | Etiqueta (acepta plantillas). |
 | `fields[].value` | — | Valor (plantilla). |
 | `fields[].fmt` | — | Formato si `value` es un solo marcador (`"{SALDO}"`). En Excel deja el número o la fecha como valor real. |
@@ -233,6 +267,10 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
 | `zebra` | `true` | Filas alternas (Excel y Word; el PDF siempre las alterna). |
 | `size` | `theme.fontSize` | Tamaño de letra (PDF). |
 | `gap` | `3` | Espacio después de la tabla en mm (PDF). |
+| `headAlign` | `center` | Alineación del encabezado: `left`, `center`, `right` o `auto` (la de los datos de cada columna). Cada columna puede cambiarla con su propio `headAlign`. |
+| `grid` | — | `true`: bordes finos en PDF, Excel y Word. `false`: sin bordes también en Word. Sin definir: como antes (solo Word lleva bordes). |
+| `borderColor` | `#D5DCE3` | Color de los bordes con `grid: true`. |
+| `totalsColor` | — | Color del texto de la fila de totales y subtotales. |
 | `breakBy` | — | Quiebre de control: agrupa filas **consecutivas** con el mismo valor de esta columna. Ver abajo. |
 | `breakTitle` | `{COL}` | Fila de encabezado de cada grupo. Acepta `{COL}` (primera fila del grupo) y `{COUNT}`. `false`: sin encabezado. |
 | `breakLabel` | `Subtotal {COL}` | Texto de la fila de subtotal. Acepta `{COL}` y `{COUNT}`. |
@@ -244,6 +282,7 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
 |---|---|
 | `col` | Columna de la fuente (alias). |
 | `label` | Encabezado. |
+| `headAlign` | Alineación del encabezado de esta columna (`left`, `center`, `right`, `auto`). Tiene prioridad sobre el `headAlign` de la tabla. |
 | `fmt` | [Formato](#formatos-de-valor). |
 | `align` | `left`, `center`, `right`. Por defecto: números a la derecha, fechas al centro, texto a la izquierda. |
 | `bold` | Negrita. |
@@ -408,6 +447,42 @@ Código QR o código de barras **Code 128** con el valor de una plantilla.
 
 En PDF el código es vectorial (nítido a cualquier zoom). En Word y Excel va como PNG con una zona blanca alrededor. Code 128 elige solo entre los juegos B y C (los números en pares ocupan la mitad).
 
+### `formulario`
+
+Campos **editables** (texto, texto de varias líneas, lista y casilla de verificación) que el destinatario llena en el PDF, el Word o el Excel. Se dibujan como pares etiqueta / campo, igual que una [`ficha`](#ficha).
+
+```json
+{ "form": { "protect": true, "password": "clave" },
+  "sections": [
+    { "type": "formulario", "source": "DOCS", "columns": 2, "fields": [
+      { "label": "Nombre",   "name": "NOMBRE", "value": "{CLIENTE}", "maxLength": 60 },
+      { "label": "Sucursal", "name": "SUCURSAL", "input": "list", "options": ["Casa Matriz", "Chorrera"], "optionsFrom": "SUCURSALES.NOMBRE" },
+      { "label": "Notas",    "name": "NOTAS", "input": "multiline", "lines": 4, "placeholder": "Escriba aquí" },
+      { "label": "Acepta",   "name": "ACEPTA", "input": "checkbox", "value": "{ACEPTA}" },
+      { "label": "Código",   "name": "CODIGO", "value": "{CODIGO}", "readOnly": true } ] } ] }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `columns` | `2` | Pares por fila. |
+| `labelWidth` | `32` | Ancho de la etiqueta en mm. |
+| `size` | `8.5` | Tamaño de letra. En PDF todos los campos usan el tamaño del primer formulario (Helvetica). |
+| `fields[].name` | — | **Obligatorio.** Letras, números y `_` (hasta 40); no puede parecer una celda de Excel (`A1`, `R1C1`) y no se puede repetir en el documento. Con varios documentos en un solo archivo se agrega `_1`, `_2`… |
+| `fields[].input` | `text` | `text`, `multiline`, `list` o `checkbox`. |
+| `fields[].label` / `value` / `fmt` / `map` / `when` | — | Como en [`ficha`](#ficha). `value` es el valor inicial. En `checkbox` marca la casilla con `S`, `Sí`, `Y`, `1`, `X`, `true` u `on`. |
+| `fields[].options` | — | `list`: opciones fijas. |
+| `fields[].optionsFrom` | — | `list`: opciones desde una fuente, `FUENTE.COLUMNA` (sin columna, la primera). Se agregan a las fijas. Si el valor inicial no está entre las opciones, queda vacío. |
+| `fields[].maxLength` | — | `text` / `multiline`: largo máximo (recorta el valor inicial). No aplica en Word. |
+| `fields[].lines` | `3` | `multiline`: líneas visibles (2 a 20). |
+| `fields[].placeholder` | — | Texto de ayuda (solo Word). |
+| `fields[].readOnly` | `false` | Campo de solo lectura. |
+| `form.protect` | `true` | Protege el documento para que solo se editen los campos (Word: *solo formularios*; Excel: hoja protegida con las celdas de los campos desbloqueadas). |
+| `form.password` | — | Contraseña de la protección (Word y Excel). `run({ formPassword })` tiene prioridad. En Word: 1 a 15 caracteres ASCII. |
+
+- **PDF:** campos AcroForm (`NeedAppearances`). La protección del PDF no se cifra.
+- **Word:** controles de contenido (texto, lista desplegable, casilla).
+- **Excel:** celdas con nombre definido, validación de datos (lista, largo máximo) y casilla `☐` / `☒`. Las listas largas van a una hoja oculta `nr_listas`.
+
 ### `linea`
 
 ```json
@@ -461,9 +536,13 @@ Pone 2 o 3 casillas **lado a lado**; cada casilla lleva sus propias secciones. S
 | Sección / opción | PDF | Excel | Word |
 |---|:---:|:---:|:---:|
 | `header` | ✓ | ✓ | ✓ |
+| `tarjetas` | ✓ | ✓ | ✓ |
 | `ficha` | ✓ | ✓ valores reales | ✓ |
+| `ficha.grid`, `labelFill`, `labelColor`, `valueColor` | ✓ | ✓ | ✓ |
+| `formulario` | ✓ AcroForm | ✓ celdas editables | ✓ controles de contenido |
 | `tabla` | ✓ | ✓ fórmulas, filtro | ✓ |
 | `tabla.groups` | ✓ | ✓ | ✓ |
+| `tabla.headAlign`, `grid`, `totalsColor` | ✓ | ✓ | ✓ |
 | `tabla.repeatHeader` | ✓ | — | siempre |
 | `alerta` | ✓ | ✓ | ✓ |
 | `texto` enriquecido | ✓ | ✓ | ✓ |
