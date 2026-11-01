@@ -308,4 +308,96 @@ fs.mkdirSync(OUT, { recursive: true });
       console.log('OK  ', 'etiquetas-116__' + format + '__' + r.name);
     }
   }
+  /* 1.18: bloques dentro de celdas de tabla (codigo, imagen, texto, grafico) y tabla dentro de formulario */
+  {
+    const d118 = { EMP: { cols: [U('EMPNO'), N('ENAME'), N('JOB'), { name: 'FOTO', type: 'BLOB' }],
+                          rows: byName.slice(0, 3).map(e => [e[0], e[1], e[2], logo.toString('base64')]) },
+                   VENTAS: { cols: [U('EMPNO'), N('MES'), U('MONTO')],
+                             rows: [].concat(...byName.slice(0, 3).map(e => ['ENE', 'FEB', 'MAR'].map((m, i) => [e[0], m, e[4] * (i + 1)]))) } };
+    const layout = { fileName: 'celdas-118', sections: [
+      { type: 'tabla', source: 'EMP', grid: true, columns: [
+        { col: 'EMPNO', label: 'QR', cell: { type: 'codigo', kind: 'qr', value: 'EMP-{EMPNO}', size: 12 } },
+        { label: 'Empleado', cell: { type: 'texto', text: '{ENAME} ({JOB})' } },
+        { label: 'Foto', cell: { type: 'imagen', field: 'FOTO', height: 10 } },
+        { label: 'Barras', cell: { type: 'codigo', kind: 'code128', value: '{EMPNO}', width: 25, height: 6 } },
+        { label: 'Ventas', when: CANVAS ? '' : 'X == 1', cell: { type: 'grafico', chart: 'line', source: 'VENTAS', link: { EMPNO: 'EMPNO' }, category: 'MES', series: ['MONTO'] } }] },
+      { type: 'formulario', title: 'Solicitud', columns: 2, fields: [
+        { label: 'Nombre', name: 'NOMBRE' }, { label: 'Código', name: 'CODIGO' },
+        { span: 'row', block: { type: 'tabla', source: 'EMP', columns: ['EMPNO', 'ENAME'] } },
+        { label: 'Notas', name: 'NOTAS', input: 'multiline', span: 'row' }] },
+      { type: 'ficha', source: 'EMP', columns: 2, fields: [
+        { label: 'Nombre', value: '{ENAME}' }, { label: 'Puesto', value: '{JOB}' },
+        { span: 'row', block: { type: 'codigo', kind: 'qr', value: 'FICHA-{EMPNO}', size: 15 } },
+        { label: 'Código', value: '{EMPNO}' }] }] };
+    const nImg = 10 + (CANVAS ? 3 : 0);
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const r = await window.novaReport.build({ layout, format, output: 'file', zipType: 'nodebuffer' }, d118);
+      const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
+      fs.writeFileSync(path.join(OUT, 'celdas-118__' + format + '__' + r.name), buf);
+      if (format === 'pdf') {
+        const t = buf.toString('latin1'), n = (t.match(/\/Subtype \/Image/g) || []).length;
+        if (n < 3) { throw new Error('pdf imágenes en celdas: ' + n); }
+        for (const f of ['NOMBRE', 'CODIGO', 'NOTAS']) { if (!new RegExp('/T \\(' + f + '\\)').test(t)) { throw new Error('pdf campo ' + f); } }
+      }
+      if (format === 'xlsx') {
+        const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0];
+        if (ws.getImages().length !== nImg) { throw new Error('xlsx imágenes en celdas: ' + ws.getImages().length); }
+        const vals = []; ws.eachRow(row => row.eachCell(c => { if (c.value !== null) { vals.push(String(c.value)); } }));
+        if (vals.indexOf('ADAMS (CLERK)') < 0 || vals.indexOf('FICHA-7876') >= 0) { throw new Error('xlsx texto/valores: ' + vals.join('|')); }
+        const names = wb.definedNames.model.map(d => d.name).sort().join(' ');
+        if (names !== 'CODIGO NOMBRE NOTAS') { throw new Error('xlsx nombres: ' + names); }
+      }
+      if (format === 'docx') {
+        const xml = await (await window.JSZip.loadAsync(buf)).file('word/document.xml').async('string');
+        const n = (xml.match(/<w:drawing>/g) || []).length;
+        if (n !== nImg) { throw new Error('docx imágenes en celdas: ' + n); }
+        if ((xml.match(/<w:sdt>/g) || []).length !== 3) { throw new Error('docx controles'); }
+        const iN = xml.indexOf('Nombre'), iT = xml.indexOf('>ADAMS<'), iO = xml.indexOf('Notas');
+        if (!(iN >= 0 && iT > iN && iO > iT)) { throw new Error('docx orden formulario/tabla/formulario'); }
+      }
+      console.log('OK  ', 'celdas-118__' + format + '__' + r.name);
+    }
+  }
+  /* 1.19: grupos (contenedor con marco), repetición por fila con link y contenedores anidados */
+  {
+    const d = { EMP: { cols: [U('EMPNO'), N('ENAME'), N('JOB')], rows: byName.slice(0, 3).map(e => [e[0], e[1], e[2]]) },
+                VENTAS: { cols: [U('EMPNO'), N('MES'), U('MONTO')],
+                          rows: [].concat(...byName.slice(0, 3).map(e => ['ENE', 'FEB', 'MAR'].map((m, i) => [e[0], m, e[4] * (i + 1)]))) } };
+    const layout = { fileName: 'grupos-119', sections: [
+      { type: 'grupo', title: 'Resumen', border: true, fill: '#F5F7FA', sections: [
+        { type: 'texto', text: ['Total de colaboradores: {EMP.EMPNO}'] },
+        { type: 'columnas', cols: [
+          [{ type: 'columnas', cols: [[{ type: 'texto', text: ['A1'] }], [{ type: 'texto', text: ['A2'] }]] }],
+          [{ type: 'grupo', border: true, sections: [{ type: 'texto', text: ['Interno'] }] }]] }] },
+      { type: 'grupo', source: 'EMP', each: true, title: 'Colaborador {ENAME}', border: true, link: { VENTAS: { EMPNO: 'EMPNO' } }, sections: [
+        { type: 'ficha', source: 'EMP', columns: 2, fields: [{ label: 'Nombre', value: '{ENAME}' }, { label: 'Puesto', value: '{JOB}' }] },
+        { type: 'tabla', source: 'VENTAS', columns: ['MES', 'MONTO'], totals: ['MONTO'] },
+        { type: 'formulario', columns: 1, fields: [{ label: 'Observación', name: 'OBS' }] }] }] };
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const r = await window.novaReport.build({ layout, format, output: 'file', zipType: 'nodebuffer' }, d);
+      const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
+      fs.writeFileSync(path.join(OUT, 'grupos-119__' + format + '__' + r.name), buf);
+      if (format === 'pdf') {
+        const t = buf.toString('latin1');
+        for (const n of ['OBS_1', 'OBS_2', 'OBS_3']) { if (!new RegExp('/T \\(' + n + '\\)').test(t)) { throw new Error('pdf campo ' + n); } }
+      }
+      if (format === 'xlsx') {
+        const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0]; const vals = [];
+        ws.eachRow(row => row.eachCell(c => { if (c.value !== null) { vals.push(c.value && c.value.formula ? 'F' : (c.value && c.value.richText ? c.value.richText.map(x => x.text).join('') : String(c.value))); } }));
+        for (const v of ['Resumen', 'A1', 'A2', 'Interno', 'Colaborador ADAMS', 'Colaborador ALLEN', 'Colaborador BLAKE']) { if (vals.indexOf(v) < 0) { throw new Error('xlsx falta ' + v + ': ' + vals.join('|')); } }
+        if (vals.filter(v => v === 'ENE').length !== 3) { throw new Error('xlsx link por fila: ' + vals.join('|')); }
+        const names = wb.definedNames.model.map(x => x.name).sort().join(' ');
+        if (names !== 'OBS_1 OBS_2 OBS_3') { throw new Error('xlsx nombres ' + names); }
+      }
+      if (format === 'docx') {
+        const xml = await (await window.JSZip.loadAsync(buf)).file('word/document.xml').async('string');
+        for (const v of ['Resumen', 'A1', 'A2', 'Interno', 'Colaborador ADAMS', 'Colaborador BLAKE']) { if (xml.indexOf('>' + v + '<') < 0) { throw new Error('docx falta ' + v); } }
+        if ((xml.match(/>ENE</g) || []).length !== 3) { throw new Error('docx link por fila'); }
+        for (const n of ['OBS_1', 'OBS_2', 'OBS_3']) { if (xml.indexOf('w:val="' + n + '"') < 0) { throw new Error('docx campo ' + n); } }
+        const iA = xml.indexOf('>ADAMS<'), iB = xml.indexOf('>Colaborador BLAKE<');
+        if (!(iA > 0 && iB > iA)) { throw new Error('docx orden'); }
+      }
+      console.log('OK  ', 'grupos-119__' + format + '__' + r.name);
+    }
+  }
 })().catch(e => { console.error('FALLÓ', e); process.exit(1); });

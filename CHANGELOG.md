@@ -1,5 +1,20 @@
 # Cambios
 
+## 1.19.0
+- Sección **`grupo`**: contenedor con título, borde, fondo y margen interno que admite cualquier sección (incluidos `columnas` y otro `grupo`). PDF, Excel y Word.
+- **Repetir por fila**: `grupo` con `source` + `each` se dibuja una vez por fila (como el *repeating frame* de Oracle Reports). Las columnas de la fila se leen como `{COL}` y `link` filtra fuentes relacionadas. Los campos de formularios repetidos llevan `_1`, `_2`…
+- Una sección dentro de un grupo sin `source` toma la del grupo.
+- **Anidamiento libre**: `columnas` dentro de `columnas`, `grupo` dentro de `columnas`, y `columnas` o `grupo` como bloque dentro de formulario, ficha o tarjetas.
+- Sin cambios para diseños existentes: los archivos de prueba de 1.17.0 salen idénticos byte a byte.
+- Designer 0.17.0: componente Grupo en la barra; se puede arrastrar cualquier componente dentro de grupos y columnas a cualquier nivel (y sacarlo); propiedades del grupo con repetición por fila.
+
+## 1.18.0
+- **Bloques en celdas de tabla**: `columns[].cell` con `type` `codigo` (QR o Code 128), `imagen` (columna BLOB de la fila o URL), `grafico` (por fila, con `link` o `filter` para tomar solo las filas relacionadas) o `texto` (plantilla). La columna se ajusta al contenido. PDF, Excel (imagen sobre la celda) y Word.
+- `tabla.valign` (`top`, `middle`, `bottom`): alineación vertical de las filas. Sin definir: centro si la tabla tiene celdas con imagen o código; arriba en el resto (como antes). `columns[].valign` la cambia por columna.
+- **Bloques dentro de un formulario, ficha o tarjetas**: un campo `{ "span": "row", "block": { "type": "tabla", … } }` pone una tabla (u otro bloque: ficha, tarjetas, texto, imagen, código, alerta, línea, gráfico, espacio) entre los campos. La sección se parte en tramos con la misma configuración; un bloque sin fuente toma la de la sección.
+- Sin cambios para diseños existentes: las propiedades nuevas son opcionales.
+- Designer 0.16.0: arrastrar Código, Imagen, Gráfico o Texto (desde la barra o desde el lienzo) sobre el encabezado de una tabla crea una columna con ese contenido; arrastrar un bloque sobre un formulario lo inserta entre los campos. Se pueden sacar de nuevo al lienzo arrastrándolos. Panel de propiedades propio para el contenido de la celda.
+
 ## 1.17.0
 - Origen **Consulta** (`query`): el diseño y/o las fuentes SQL se leen de una tabla propia con una consulta que devuelve una fila (`LAYOUT`, `SOURCES` y opcional `TEMPLATE_URL`). Quita el límite de 4000 caracteres de los atributos sin depender de una función resolver ni del Designer. Lo que la consulta no devuelva se toma de los atributos.
 - Atributo nuevo **Consulta del reporte**. Con este origen, **Fuentes SQL** y **Diseño (JSON)** pasan a ser opcionales.

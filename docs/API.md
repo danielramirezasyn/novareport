@@ -476,6 +476,7 @@ El prefijo `ORA-nnnnn:` del primer error se elimina antes de mostrarlo.
 | Documentos por bloque | `batch.chunkSize` (defecto 5) | Diseño. Bloques chicos mantienen la página receptiva. |
 | Texto de atributos | 4000 caracteres | APEX. Use el origen Consulta ([§3.2](#32-origen-consulta)) o una variable global. |
 | Memoria | La del navegador | Todo el lote y el ZIP se arman en memoria. |
+| Gráficos en celdas | Uno por fila | `tabla.columns[].cell` de tipo `grafico` dibuja un gráfico (canvas → PNG) por fila: úselo con decenas de filas, no miles. |
 
 ## 13. Seguridad
 

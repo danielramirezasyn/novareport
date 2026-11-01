@@ -1,5 +1,5 @@
 /*!
- * novaReport 1.17.0 - Reportes PDF / Excel / Word para Oracle APEX
+ * novaReport 1.19.0 - Reportes PDF / Excel / Word para Oracle APEX
  * https://github.com/danielramirezasyn/novareport - Licencia MIT
  * NovaCode - plugin de Acción Dinámica COM.NOVACODE.NOVAREPORT
  *
@@ -10,7 +10,7 @@
 window.novaReport = (function () {
   'use strict';
 
-  var VERSION = '1.17.0';
+  var VERSION = '1.19.0';
 
   /* ------------------------------------------------------------------ librerías */
   var LIBS = {
@@ -265,11 +265,14 @@ window.novaReport = (function () {
       if (!f && t === 'NUMBER' && !c.value) {
         f = rows.some(function (r) { return isNum(r[name]) && Math.round(r[name]) !== r[name]; }) ? 'money' : null;
       }
-      return { col: name, value: c.value, label: c.label !== undefined ? c.label : label(name || ''),
+      var ci = c.cell && CELL_IMG[c.cell.type] ? c.cell : null;
+      return { col: name, value: c.value !== undefined ? c.value : (c.cell && c.cell.type === 'texto' ? c.cell.text : undefined),
+               label: c.label !== undefined ? c.label : label(name || ''), cell: ci,
+               valign: /^(top|middle|bottom)$/.test(String(c.valign || '').toLowerCase()) ? String(c.valign).toLowerCase() : null,
                fmt: f, map: c.map, bold: !!c.bold, width: c.width,
-               align: c.align || (textFmt(f) ? 'left' : (t === 'NUMBER' || f === 'money' || f === 'int' || f === 'num' ? 'right' : (t === 'DATE' || f === 'date' ? 'center' : 'left'))),
+               align: c.align || (ci ? 'center' : null) || (textFmt(f) ? 'left' : (t === 'NUMBER' || f === 'money' || f === 'int' || f === 'num' ? 'right' : (t === 'DATE' || f === 'date' ? 'center' : 'left'))),
                cellStyle: c.cellStyle, color: c.color, headAlign: c.headAlign,
-               isNum: !textFmt(f) && ((t === 'NUMBER' && !c.map && !c.value) || f === 'money' || f === 'int' || /^num/.test(f || '')) };
+               isNum: !ci && !textFmt(f) && ((t === 'NUMBER' && !c.map && !c.value) || f === 'money' || f === 'int' || /^num/.test(f || '')) };
     });
   }
   function groupsOf(sec, cols) {
@@ -290,6 +293,85 @@ window.novaReport = (function () {
   function cellText(c, row, ctx) {
     var v = cellRaw(c, row, ctx);
     return c.map && c.map[row[c.col]] !== undefined ? String(v) : fmt(v, c.fmt);
+  }
+  /* 1.18: bloque dentro de una celda de tabla, por fila: { type: codigo | imagen | grafico | texto, ... }.
+     texto se resuelve como value (plantilla). cellImg devuelve { im, w, h } (mm) o null */
+  var CELL_IMG = { codigo: 1, imagen: 1, grafico: 1 };
+  function copyOf(o) { var x = {}, k; for (k in o) { if (Object.prototype.hasOwnProperty.call(o, k)) { x[k] = o[k]; } } return x; }
+  /* Contexto del gráfico de una celda: filas de su fuente unidas a la fila (link) y filtradas (filter con {COL} de la fila) */
+  function cellCtx(b, ctx, row) {
+    var src = String(b.source || '').toUpperCase(), lk = b.link || {}, f = b.filter ? tpl(b.filter, ctx, row) : null;
+    var rows = (ctx.S[src] || []).filter(function (r) {
+      for (var k in lk) {
+        if (Object.prototype.hasOwnProperty.call(lk, k) && String(r[k.toUpperCase()]) !== String(row[String(lk[k]).toUpperCase()])) { return false; }
+      }
+      return !f || cond(f, ctx, r);
+    });
+    var c2 = copyOf(ctx);
+    c2.S = copyOf(ctx.S); c2.S[src] = rows;
+    return c2;
+  }
+  /* 1.18: alineación vertical de las filas de una tabla (top | middle | bottom); con celdas de imagen, centro por defecto */
+  function tableVAlign(sec, cols) {
+    var v = String(sec.valign || '').toLowerCase();
+    if (v === 'top' || v === 'middle' || v === 'bottom') { return v; }
+    return cols.some(function (c) { return c.cell; }) ? 'middle' : null;
+  }
+  function cellImg(c, row, ctx, th) {
+    var b = c.cell;
+    if (!b) { return null; }
+    if (b.type === 'codigo') {
+      var bc = copyOf(b);
+      if (!bc.size) { bc.size = 14; }
+      if (!bc.width) { bc.width = 30; }
+      if (!bc.height) { bc.height = 8; }
+      var cd = codeOf(bc, ctx, row);
+      if (!cd) { return null; }
+      var p = codePng(cd);
+      return { im: p, w: p.wmm, h: p.hmm };
+    }
+    if (b.type === 'imagen') {
+      var v = b.field ? row[String(b.field).toUpperCase()] : null, im = null;
+      try { im = v ? imgFromB64(v) : (b.url && !b.field ? IMG[imgUrl(tpl(b.url, ctx, row))] : null); }
+      catch (e) { if (window.console) { console.warn('novaReport: imagen inválida en ' + b.field, e); } }
+      if (!im) { return null; }
+      var sz = imgSize({ width: b.width || (b.height ? undefined : 15), height: b.height }, im);
+      return { im: im, w: sz.w, h: sz.h };
+    }
+    var gs = copyOf(b);
+    delete gs.filter; delete gs.link;
+    if (!gs.width) { gs.width = 40; }
+    if (!gs.height) { gs.height = 15; }
+    var g = chartImg(gs, cellCtx(b, ctx, row), th);
+    return g ? { im: g, w: g.wmm, h: g.hmm } : null;
+  }
+  /* 1.18: bloques dentro de un formulario, ficha o tarjetas: { span: "row", block: { type: "tabla", ... } } parte la sección
+     en tramos (campos, bloque, campos...) con la misma configuración; el título va en el primer tramo.
+     Un bloque sin fuente toma la de la sección. */
+  var SPLIT_TYPES = { formulario: 1, ficha: 1, tarjetas: 1 };
+  function splitForms(list) {
+    var out = [];
+    (list || []).forEach(function (s) {
+      if (!s || !SPLIT_TYPES[s.type] || !(s.fields || []).some(function (f) { return f && f.block; })) { out.push(s); return; }
+      var part = null, n = 0;
+      var flush = function () { if (part && part.fields.length) { out.push(part); } part = null; };
+      s.fields.forEach(function (f) {
+        if (f && f.block) {
+          var b = f.block;
+          if (!b || !CELL_TYPES[b.type] || b.type === 'formulario') { return; }
+          flush(); b = copyOf(b);
+          if (!b.source && s.source && b.type !== 'linea' && b.type !== 'espacio') { b.source = s.source; }
+          if (f.when && !b.when) { b.when = f.when; }
+          if (!n && s.title && b.type === 'tabla' && !b.title) { b.title = s.title; }
+          out.push(b); n++;
+          return;
+        }
+        if (!part) { part = copyOf(s); part.fields = []; if (n) { delete part.title; } n++; }
+        part.fields.push(f);
+      });
+      flush();
+    });
+    return out;
   }
   /* Totales y subtotales: ["COL"] (suma) o [{ "col": "COL", "fn": "sum|avg|min|max|count" }] */
   var AGG_XL = { sum: 9, avg: 1, min: 5, max: 4, count: 3 };               // código de SUBTOTAL() en Excel
@@ -445,7 +527,9 @@ window.novaReport = (function () {
     return { protect: fm.protect !== false, password: pw ? String(pw) : '' };
   }
   function hasForm(list) {
-    return (list || []).some(function (s) { return s && (s.type === 'formulario' || (s.type === 'columnas' && (s.cols || []).some(hasForm))); });
+    return (list || []).some(function (s) {
+      return s && (s.type === 'formulario' || (s.type === 'columnas' && (s.cols || []).some(hasForm)) || (s.type === 'grupo' && hasForm(s.sections)));
+    });
   }
   function layoutHasForm(layout) {
     var sm = layout && layout.batch && layout.batch.summary;
@@ -632,10 +716,42 @@ window.novaReport = (function () {
              labelSize: sec.labelSize || 7, size: sec.size || 11, cardGap: sec.cardGap !== undefined ? Number(sec.cardGap) : 3 };
   }
   function sectionsFor(layout, format, ctx) {
-    return (layout.sections || []).filter(function (s) { return (!s.formats || s.formats.indexOf(format) >= 0) && (!ctx || shown(s, ctx)); });
+    var ok = function (s) { return (!s.formats || s.formats.indexOf(format) >= 0) && (!ctx || shown(s, ctx)); };
+    var l = (layout.sections || []).filter(ok);
+    return ctx ? splitForms(l).filter(ok) : l;
   }
   /* Columnas: 1 a 3 casillas lado a lado. Dentro solo van secciones que no dependen de la página completa. */
-  var CELL_TYPES = { ficha: 1, formulario: 1, tarjetas: 1, texto: 1, imagen: 1, codigo: 1, alerta: 1, linea: 1, tabla: 1, grafico: 1, espacio: 1 };
+  var CELL_TYPES = { ficha: 1, formulario: 1, tarjetas: 1, texto: 1, imagen: 1, codigo: 1, alerta: 1, linea: 1, tabla: 1, grafico: 1, espacio: 1,
+                     columnas: 1, grupo: 1 };   /* 1.19: contenedores anidados */
+  /* 1.19: secciones de un grupo, ya filtradas para el formato y el documento */
+  var NO_SRC = { linea: 1, espacio: 1, columnas: 1, grupo: 1 };
+  function groupSecs(sec, format, ctx) {
+    var ok = function (c) { return c && CELL_TYPES[c.type] && (!c.formats || c.formats.indexOf(format) >= 0) && shown(c, ctx); };
+    return splitForms((Array.isArray(sec.sections) ? sec.sections : []).filter(ok).map(function (c) {
+      if (c.source || !sec.source || NO_SRC[c.type]) { return c; }
+      var x = copyOf(c); x.source = sec.source; return x;   /* sin fuente: la del grupo */
+    })).filter(ok);
+  }
+  /* 1.19: contextos de un grupo. Con each + source, uno por fila: la fuente queda con esa fila, sus columnas
+     se leen como {COL} y link: { "FUENTE": { "COL_FUENTE": "COL_FILA" } } filtra otras fuentes por la fila */
+  function groupCtxs(sec, ctx) {
+    if (!sec.each || !sec.source) { return [{ ctx: ctx, suf: '' }]; }
+    var src = String(sec.source).toUpperCase(), rows = rowsOf(sec, ctx), lk = sec.link || {};
+    if (Number(sec.max) > 0) { rows = rows.slice(0, Number(sec.max)); }
+    return rows.map(function (r, k) {
+      var c = copyOf(ctx), d = copyOf(ctx.doc || {}), key;
+      c.S = copyOf(ctx.S); c.S[src] = [r];
+      Object.keys(lk).forEach(function (s2) {
+        var m = lk[s2] || {}, S2 = String(s2).toUpperCase();
+        c.S[S2] = (ctx.S[S2] || []).filter(function (x) {
+          return Object.keys(m).every(function (k2) { return String(x[k2.toUpperCase()]) === String(r[String(m[k2]).toUpperCase()]); });
+        });
+      });
+      for (key in r) { if (Object.prototype.hasOwnProperty.call(r, key)) { d[key] = r[key]; } }
+      c.doc = d;
+      return { ctx: c, suf: '_' + (k + 1) };
+    });
+  }
   function fitCell(c, w) {
     var o = {}, k;
     for (k in c) { if (Object.prototype.hasOwnProperty.call(c, k)) { o[k] = c[k]; } }
@@ -661,7 +777,7 @@ window.novaReport = (function () {
     var free = avail - cg * (n - 1), x = 0;
     return cols.map(function (list, i) {
       var w = free * ws[i] / sum;
-      var secs = (Array.isArray(list) ? list : []).filter(function (c) {
+      var secs = splitForms((Array.isArray(list) ? list : []).filter(function (c) { return c && (!c.formats || c.formats.indexOf(format) >= 0); })).filter(function (c) {
         return c && CELL_TYPES[c.type] && (!c.formats || c.formats.indexOf(format) >= 0) && shown(c, ctx);
       }).map(function (c) { return fitCell(c, w); });
       var o = { x: x, w: w, secs: secs };
@@ -707,7 +823,17 @@ window.novaReport = (function () {
   }
   function imagesOf(layout) {
     var out = [];
-    function scan(list) { (list || []).forEach(function (s) { if (s && s.type === 'imagen' && s.url && !s.field) { out.push(s.url); } if (s && s.type === 'columnas') { (s.cols || []).forEach(scan); } }); }
+    function scan(list) {
+      (list || []).forEach(function (s) {
+        if (s && s.type === 'imagen' && s.url && !s.field) { out.push(s.url); }
+        if (s && s.type === 'columnas') { (s.cols || []).forEach(scan); }
+        if (s && SPLIT_TYPES[s.type]) { scan((s.fields || []).map(function (f) { return f && f.block; })); }
+        if (s && s.type === 'grupo') { scan(s.sections); }
+        if (s && s.type === 'tabla') {
+          (s.columns || []).forEach(function (c) { if (c && c.cell && c.cell.type === 'imagen' && c.cell.url && !c.cell.field && String(c.cell.url).indexOf('{') < 0) { out.push(c.cell.url); } });
+        }
+      });
+    }
     scan(layout.sections);
     if (layout.batch && layout.batch.summary) { scan(layout.batch.summary.sections); if (layout.batch.summary.layout) { scan(layout.batch.summary.layout.sections); } }
     return out;
@@ -854,9 +980,9 @@ window.novaReport = (function () {
     return { n: q.getModuleCount(), dark: function (x, y) { return q.isDark(y, x); } };
   }
   /* Sección "codigo": { kind: 'qr' | 'code128', value, size | width + height, color, showText } */
-  function codeOf(sec, ctx) {
-    var row = sec.source ? rowsOf(sec, ctx)[0] : null;
-    if (sec.source && !row) { return null; }
+  function codeOf(sec, ctx, rowIn) {
+    var row = rowIn || (sec.source ? rowsOf(sec, ctx)[0] : null);
+    if (!rowIn && sec.source && !row) { return null; }
     var v = tpl(sec.value, ctx, row);
     if (!v) { return null; }
     var kind = String(sec.kind || 'qr').toLowerCase(), color = sec.color || '#000000';
@@ -1236,6 +1362,55 @@ window.novaReport = (function () {
           y = yEnd + (sec.gap !== undefined ? sec.gap : 1); doc.lastAutoTable = { finalY: y };
           return;
         }
+        if (t === 'grupo') {
+          /* 1.19: contenedor con título, fondo, borde y margen interno; con each, uno por fila */
+          var gCtx0 = ctx, gSuf0 = suffix, gx0 = XL, gr0 = XR;
+          var gPad = sec.padding !== undefined ? Number(sec.padding) : (sec.border || sec.fill ? 3 : 0);
+          var gTitle = function (text) {
+            doc.autoTable({ startY: Math.max(y, last()), theme: 'plain', margin: { left: XL, right: XR }, body: [[text]],
+                            styles: { fontSize: sec.titleSize || sz + 2, fontStyle: 'bold', cellPadding: 1.6,
+                                      fillColor: hexRgb(sec.titleFill || th.primary), textColor: hexRgb(sec.titleColor || th.headText) } });
+            y = last();
+          };
+          /* Dibuja el grupo desde y; devuelve el alto */
+          var gDraw = function (inner) {
+            var ys0 = Math.max(y, last());
+            XL = gx0; XR = gr0; y = ys0;
+            if (sec.title) { gTitle(tpl(sec.title, ctx)); }
+            y = Math.max(y, last()) + gPad; doc.lastAutoTable = { finalY: y };
+            XL = gx0 + gPad; XR = gr0 + gPad;
+            inner.forEach(drawSec);
+            var ye = Math.max(y, last()) + gPad;
+            XL = gx0; XR = gr0;
+            return ye - ys0;
+          };
+          groupCtxs(sec, ctx).forEach(function (g) {
+            ctx = g.ctx; suffix = gSuf0 + g.suf;
+            var inner = groupSecs(sec, 'pdf', ctx);
+            if (!inner.length && !sec.title) { return; }
+            /* Medir en un borrador para saber si cabe en una página */
+            var real = doc, ys = Math.max(y, last());
+            doc = new window.jspdf.jsPDF({ orientation: page.orientation || 'portrait', unit: 'mm', format: page.size || 'letter' });
+            y = M; doc.lastAutoTable = null;
+            var gh = gDraw(inner), gfit = doc.internal.getNumberOfPages() === 1;
+            doc = real; y = ys; doc.lastAutoTable = { finalY: ys };
+            if (gfit && sec.keepTogether !== false && y + gh > H - M - 10) { doc.addPage(); y = M; doc.lastAutoTable = { finalY: y }; }
+            var gy0 = y, gp0 = doc.internal.getCurrentPageInfo().pageNumber, gw = W - gx0 - gr0;
+            if (gfit && sec.fill) { var gf = hexRgb(sec.fill); doc.setFillColor(gf[0], gf[1], gf[2]); doc.rect(gx0, gy0, gw, gh, 'F'); }
+            var gh2 = gDraw(inner);
+            if (sec.border && doc.internal.getCurrentPageInfo().pageNumber === gp0) {
+              var gb = hexRgb(sec.borderColor || GRID_LINE);
+              doc.setDrawColor(gb[0], gb[1], gb[2]); doc.setLineWidth(sec.borderWidth || 0.3);
+              doc.rect(gx0, gy0, gw, gh2, 'S');
+              doc.setDrawColor(0, 0, 0);
+            }
+            y = gy0 + gh2;
+            if (doc.internal.getCurrentPageInfo().pageNumber !== gp0) { y = Math.max(y, last()); }
+            y += sec.gap !== undefined ? Number(sec.gap) : 3; doc.lastAutoTable = { finalY: y };
+          });
+          ctx = gCtx0; suffix = gSuf0; XL = gx0; XR = gr0;
+          return;
+        }
         if (t === 'ficha') {
           var fr = rowsOf(sec, ctx)[0] || {}, n = sec.columns || 3, body = [], cs = {};
           slotRows((sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }), n).forEach(function (row) {
@@ -1409,20 +1584,30 @@ window.novaReport = (function () {
             if (c.bold) { colSt[i].fontStyle = 'bold'; }
             if (c.width) { colSt[i].cellWidth = c.width; }
           });
-          var items = tableItems(sec, rows), sset = subCols(sec), GR = hexRgb(th.group), bodyIt = [];
+          var items = tableItems(sec, rows), sset = subCols(sec), GR = hexRgb(th.group), bodyIt = [], bodyIm = [], imW = {};
           var body = rows.length ? [] : [[{ content: tpl(sec.emptyText, ctx), colSpan: cols.length, styles: { halign: 'left', fontStyle: 'italic' } }]];
           if (rows.length) {
             items.forEach(function (it) {   /* bodyIt: ítem de cada fila del cuerpo (un subtotal puede ocupar 2 filas) */
-              if (it.k === 'head') { body.push([{ content: breakText(sec, it, ctx), colSpan: cols.length, styles: { halign: 'left', fontStyle: 'bold', fillColor: GR } }]); bodyIt.push(it); return; }
-              if (it.k === 'sub') { pdfAgg(aggRow(cols, sset, it.rows, breakText(sec, it, ctx)), cols.length).forEach(function (rw) { body.push(rw); bodyIt.push(it); }); return; }
-              body.push(cols.map(function (c) { return cellText(c, it.r, ctx); })); bodyIt.push(it);
+              if (it.k === 'head') { body.push([{ content: breakText(sec, it, ctx), colSpan: cols.length, styles: { halign: 'left', fontStyle: 'bold', fillColor: GR } }]); bodyIt.push(it); bodyIm.push(null); return; }
+              if (it.k === 'sub') { pdfAgg(aggRow(cols, sset, it.rows, breakText(sec, it, ctx)), cols.length).forEach(function (rw) { body.push(rw); bodyIt.push(it); bodyIm.push(null); }); return; }
+              var rim = null;
+              body.push(cols.map(function (c, ci) {
+                if (!c.cell) { return cellText(c, it.r, ctx); }
+                var cim = cellImg(c, it.r, ctx, th);
+                if (cim) { (rim = rim || {})[ci] = cim; imW[ci] = Math.max(imW[ci] || 0, cim.w); }
+                return '';
+              }));
+              bodyIt.push(it); bodyIm.push(rim);
             });
+            Object.keys(imW).forEach(function (ci) { colSt[ci].cellWidth = Math.max(cols[ci].width || 0, imW[ci] + 3); });
           }
           var foot = null, tlist = aggList(sec.totals);
           if (tlist.length && rows.length) {
             foot = pdfAgg(aggRow(cols, tlist, rows, totText(sec, ctx, rows)), cols.length);
           }
-          var tst = { fontSize: sec.size || sz, cellPadding: sec.grid ? 1.2 : 0.8 };
+          var tst = { fontSize: sec.size || sz, cellPadding: sec.grid ? 1.2 : 0.8 }, tva = tableVAlign(sec, cols);
+          if (tva) { tst.valign = tva; }
+          cols.forEach(function (c, i) { if (c.valign) { colSt[i].valign = c.valign; } });
           if (sec.grid) { tst.lineWidth = 0.15; tst.lineColor = hexRgb(sec.borderColor || GRID_LINE); }
           doc.autoTable({
             startY: y, margin: { left: XL, right: XR }, head: head, body: body, foot: foot || undefined,
@@ -1451,7 +1636,18 @@ window.novaReport = (function () {
                 if (st.color) { h.cell.styles.textColor = hexRgb(st.color); }
                 if (st.bold) { h.cell.styles.fontStyle = 'bold'; }
               }
+              var cim = bodyIm[h.row.index] && bodyIm[h.row.index][h.column.index];
+              if (cim) { h.cell.styles.minCellHeight = Math.max(h.cell.styles.minCellHeight || 0, cim.h + 2); }
               if (hooks && hooks.pdfCell) { hooks.pdfCell(h, r, c, sec, ctx); }
+            },
+            didDrawCell: function (h) {
+              if (h.section !== 'body') { return; }
+              var cim = bodyIm[h.row.index] && bodyIm[h.row.index][h.column.index];
+              if (!cim) { return; }
+              var al = cols[h.column.index].align, x = al === 'left' ? h.cell.x + 1 : (al === 'right' ? h.cell.x + h.cell.width - cim.w - 1 : h.cell.x + (h.cell.width - cim.w) / 2);
+              var cva = cols[h.column.index].valign || tva;
+              var iy = cva === 'top' ? h.cell.y + 1 : (cva === 'bottom' ? h.cell.y + h.cell.height - cim.h - 1 : h.cell.y + (h.cell.height - cim.h) / 2);
+              doc.addImage(cim.im.data, cim.im.ext === 'jpg' ? 'JPEG' : 'PNG', x, iy, cim.w, cim.h, undefined, 'FAST');
             }
           });
           gap(sec.gap || 3);
@@ -1575,11 +1771,13 @@ window.novaReport = (function () {
         var list = sd.sections ? sd.sections.map(function (id) {
           return typeof id === 'number' ? secs[id] : secs.filter(function (s) { return s.id === id; })[0];
         }).filter(Boolean) : secs;
-        list = list.filter(function (s) { return shown(s, ctx); });
+        list = splitForms(list.filter(function (s) { return shown(s, ctx); })).filter(function (s) { return (!s.formats || s.formats.indexOf('xlsx') >= 0) && shown(s, ctx); });
         var maxC = 4, r = 1, widths = {}, tables = 0, freezeAt = null, filterRef = null, hasFields = false;
         /* Columnas de hoja que necesita cada casilla de una sección columnas */
         var need = function (secs) {
           return secs.reduce(function (m, x) {
+            if (x.type === 'columnas') { return Math.max(m, cellsOf(x, 'xlsx', ctx, 100).reduce(function (a, c) { return a + need(c.secs) + 1; }, -1)); }
+            if (x.type === 'grupo') { return Math.max(m, need(groupSecs(x, 'xlsx', ctx))); }
             return Math.max(m, x.type === 'tabla' ? columnsOf(x, ctx, rowsOf(x, ctx)).length : (x.type === 'ficha' ? (x.columns || 3) * 2 : x.type === 'formulario' ? (x.columns || 2) * 2 : x.type === 'tarjetas' ? cardsOf(x, ctx, th).n : (x.type === 'texto' || x.type === 'alerta' ? 4 : 2)));
           }, 2);
         };
@@ -1589,6 +1787,7 @@ window.novaReport = (function () {
           if (s.type === 'ficha') { maxC = Math.max(maxC, (s.columns || 3) * 2); }
           if (s.type === 'formulario') { maxC = Math.max(maxC, (s.columns || 2) * 2); }
           if (s.type === 'tarjetas') { maxC = Math.max(maxC, cardsOf(s, ctx, th).n); }
+          if (s.type === 'grupo') { maxC = Math.max(maxC, need(groupSecs(s, 'xlsx', ctx))); }
         });
         function setW(c, txt) { var l = String(txt === null || txt === undefined ? '' : txt).length; c += C0; widths[c] = Math.min(60, Math.max(widths[c] || 8, l + 2)); }
         /* Casillas de columnas: C0 desplaza la columna de inicio; maxC es el ancho del bloque */
@@ -1612,7 +1811,7 @@ window.novaReport = (function () {
         list.forEach(function drawSec(sec) {
           var t = sec.type;
           if (t === 'columnas') {
-            var r0 = r, rEnd = r, c0s = C0, mx = maxC, off = 0;
+            var r0 = r, rEnd = r, c0s = C0, mx = maxC, off = 0, ic0 = inCols;
             inCols = true;
             cellsOf(sec, 'xlsx', ctx, 100).forEach(function (c) {
               var k = need(c.secs);
@@ -1620,7 +1819,39 @@ window.novaReport = (function () {
               c.secs.forEach(drawSec);
               rEnd = Math.max(rEnd, r); off += k + 1;
             });
-            C0 = c0s; maxC = mx; inCols = false; r = rEnd;
+            C0 = c0s; maxC = mx; inCols = ic0; r = rEnd;
+            return;
+          }
+          if (t === 'grupo') {
+            /* 1.19: título en banda, secciones, borde exterior y fondo en las celdas vacías */
+            var xc0 = ctx, xs0 = suffix;
+            groupCtxs(sec, ctx).forEach(function (g) {
+              ctx = g.ctx; suffix = xs0 + g.suf;
+              var inner = groupSecs(sec, 'xlsx', ctx), rTop = r;
+              if (!inner.length && !sec.title) { return; }
+              if (sec.title) { band(tpl(sec.title, ctx), fill(sec.titleFill || th.primary), { bold: true, color: { argb: argb(sec.titleColor || th.headText) } }, 20); }
+              inner.forEach(drawSec);
+              var rBot = Math.max(rTop, r - 1);
+              if (sec.fill) {
+                for (var fr1 = rTop; fr1 <= rBot; fr1++) { for (var fc1 = 1; fc1 <= maxC; fc1++) { var fx1 = cellAt(fr1, fc1); if (!fx1.fill || fx1.fill.type !== 'pattern') { fx1.fill = fill(sec.fill); } } }
+              }
+              if (sec.border) {
+                var bs = { style: 'thin', color: { argb: argb(sec.borderColor || GRID_LINE) } };
+                for (var br1 = rTop; br1 <= rBot; br1++) {
+                  for (var bc1 = 1; bc1 <= maxC; bc1++) {
+                    if (br1 !== rTop && br1 !== rBot && bc1 !== 1 && bc1 !== maxC) { continue; }
+                    var bx = cellAt(br1, bc1), bo = copyOf(bx.border || {});
+                    if (br1 === rTop) { bo.top = bs; }
+                    if (br1 === rBot) { bo.bottom = bs; }
+                    if (bc1 === 1) { bo.left = bs; }
+                    if (bc1 === maxC) { bo.right = bs; }
+                    bx.border = bo;
+                  }
+                }
+              }
+              r = rBot + 1 + (sec.gap === 0 ? 0 : 1);
+            });
+            ctx = xc0; suffix = xs0;
             return;
           }
           if (t === 'header') {
@@ -1860,10 +2091,23 @@ window.novaReport = (function () {
                 gStart = null; return;
               }
               if (gStart === null) { gStart = r; }
-              var row = it.r, ri = it.i;
+              var row = it.r, ri = it.i, xva = tableVAlign(sec, cols);
               var rs = styleOf(sec.rowStyle, ctx, row);
               cols.forEach(function (c, i) {
                 var cell = cellAt(r, i + 1), raw = cellRaw(c, row, ctx);
+                if (c.cell) {
+                  var cim = cellImg(c, row, ctx, th), wc = i + 1 + C0;
+                  cell.value = null;
+                  if (c.valign || xva) { cell.alignment = { horizontal: c.align, vertical: c.valign || xva }; }
+                  if (ri % 2 === 1 && sec.zebra !== false) { cell.fill = fill(th.zebra); }
+                  if (cim) {
+                    var xid = wb.addImage({ base64: cim.im.data, extension: cim.im.ext === 'jpg' ? 'jpeg' : 'png' });
+                    ws.addImage(xid, { tl: { col: wc - 1 + 0.08, row: r - 1 + 0.08 }, ext: { width: cim.w * 3.78, height: cim.h * 3.78 } });
+                    rowH(r, cim.h * 2.835 + 4);
+                    widths[wc] = Math.min(60, Math.max(widths[wc] || 8, Math.ceil(cim.w * 3.78 / 7) + 2));
+                  }
+                  return;
+                }
                 if (c.isNum && isNum(raw)) {
                   cell.value = raw;
                   cell.numFmt = c.fmt === 'int' ? '#,##0' : (c.fmt === 'money' || /^num/.test(c.fmt || '') ? '#,##0.' + new Array(((c.fmt || '').split(':')[1] || 2) * 1 + 1).join('0') : 'General');
@@ -1872,7 +2116,7 @@ window.novaReport = (function () {
                 } else {
                   cell.value = raw === null || raw === undefined ? null : (textFmt(c.fmt) && !c.map ? fmt(raw, c.fmt) : String(raw));
                 }
-                cell.alignment = { horizontal: c.align };
+                cell.alignment = c.valign || xva ? { horizontal: c.align, vertical: c.valign || xva } : { horizontal: c.align };
                 var st = styleOf(c.cellStyle, ctx, row) || rs;
                 if (st && st.fill) { cell.fill = fill(st.fill); } else if (ri % 2 === 1 && sec.zebra !== false) { cell.fill = fill(th.zebra); }
                 var font = {};
@@ -2014,7 +2258,7 @@ window.novaReport = (function () {
       o = o || {};
       var pv = o.pad !== undefined ? o.pad : 30;
       return new D.TableCell({ children: [para(text, o)], columnSpan: o.span, margins: { top: pv, bottom: pv, left: 60, right: 60 },
-                               verticalAlign: o.middle ? D.VerticalAlign.CENTER : undefined,
+                               verticalAlign: o.middle || o.valign === 'middle' ? D.VerticalAlign.CENTER : (o.valign === 'bottom' ? D.VerticalAlign.BOTTOM : (o.valign === 'top' ? D.VerticalAlign.TOP : undefined)),
                                shading: o.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(o.fill) } : undefined });
     }
     function spacer() { return new D.Paragraph({ children: [], spacing: { before: 60, after: 60 } }); }
@@ -2066,6 +2310,33 @@ window.novaReport = (function () {
           kids = saveK; usable = saveU;
           kids.push(new D.Table({ rows: [new D.TableRow({ cantSplit: true, children: tcs })], width: { size: usable, type: D.WidthType.DXA },
                                   columnWidths: cwd, borders: noB, layout: D.TableLayoutType.FIXED }), spacer());
+          return;
+        }
+        if (t === 'grupo') {
+          /* 1.19: tabla de una celda (título opcional en su propia fila), con fondo, borde y margen interno */
+          var wc0 = ctx, ws0 = suffix, wK = kids, wU = usable;
+          var wPad = Math.round((sec.padding !== undefined ? Number(sec.padding) : (sec.border || sec.fill ? 3 : 0)) * 56.7);
+          var wB = sec.border ? gridOf(sec.borderColor || GRID_LINE) : noB;
+          groupCtxs(sec, ctx).forEach(function (g) {
+            ctx = g.ctx; suffix = ws0 + g.suf;
+            var inner = groupSecs(sec, 'docx', ctx);
+            if (!inner.length && !sec.title) { return; }
+            kids = []; usable = Math.max(600, wU - 2 * wPad);
+            inner.forEach(drawSec);
+            if (!kids.length || !(kids[kids.length - 1] instanceof D.Paragraph)) { kids.push(para('')); }
+            var rowsG = [];
+            if (sec.title) {
+              rowsG.push(new D.TableRow({ cantSplit: true, children: [cell(tpl(sec.title, ctx), { bold: true, size: Math.round((sec.titleSize || (th.fontSize || 7) + 2) * 2),
+                color: sec.titleColor || th.headText, fill: sec.titleFill || th.primary, pad: 60 })] }));
+            }
+            rowsG.push(new D.TableRow({ cantSplit: sec.keepTogether !== false, children: [new D.TableCell({ children: kids,
+              margins: { top: wPad, bottom: wPad, left: wPad, right: wPad },
+              shading: sec.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(sec.fill) } : undefined })] }));
+            kids = wK; usable = wU;
+            kids.push(new D.Table({ rows: rowsG, width: { size: usable, type: D.WidthType.DXA }, columnWidths: [usable], borders: wB,
+                                    layout: D.TableLayoutType.FIXED }), spacer());
+          });
+          kids = wK; usable = wU; ctx = wc0; suffix = ws0;
           return;
         }
         if (t === 'header') {
@@ -2263,7 +2534,7 @@ window.novaReport = (function () {
           if (!rows.length) {
             trs2.push(new D.TableRow({ children: [cell(tpl(sec.emptyText, ctx), { italic: true, span: cols.length })] }));
           }
-          var sset = subCols(sec);
+          var sset = subCols(sec), wImW = {}, wva = tableVAlign(sec, cols);
           /* Fila(s) de totales: texto combinado hasta la primera columna con agregado */
           var wordAgg = function (ar) {
             var lab = cell(ar.text, { bold: true, align: 'left', fill: th.totals, span: ar.at || cols.length, color: sec.totalsColor });
@@ -2282,16 +2553,27 @@ window.novaReport = (function () {
             }
             var row = it.r, ri = it.i;
             var rs = styleOf(sec.rowStyle, ctx, row);
-            trs2.push(new D.TableRow({ cantSplit: true, children: cols.map(function (c) {
+            trs2.push(new D.TableRow({ cantSplit: true, children: cols.map(function (c, ci) {
               var st = styleOf(c.cellStyle, ctx, row) || rs || {};
-              return cell(cellText(c, row, ctx), { align: c.align, bold: c.bold || st.bold, color: st.color || c.color,
+              if (c.cell) {
+                var cim = cellImg(c, row, ctx, th), cfill = st.fill || (ri % 2 === 1 && sec.zebra !== false ? th.zebra : null);
+                if (cim) { wImW[ci] = Math.max(wImW[ci] || 0, cim.w); }
+                var cwv = c.valign || wva;
+                return new D.TableCell({ verticalAlign: cwv === 'top' ? D.VerticalAlign.TOP : (cwv === 'bottom' ? D.VerticalAlign.BOTTOM : D.VerticalAlign.CENTER), margins: { top: 30, bottom: 30, left: 60, right: 60 },
+                  shading: cfill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(cfill) } : undefined,
+                  children: [new D.Paragraph({ spacing: { before: 0, after: 0 },
+                    alignment: c.align === 'right' ? D.AlignmentType.RIGHT : (c.align === 'left' ? D.AlignmentType.LEFT : D.AlignmentType.CENTER),
+                    children: cim ? [new D.ImageRun({ type: cim.im.ext === 'jpg' ? 'jpg' : 'png', data: cim.im.buf,
+                                                      transformation: { width: Math.round(cim.w * 3.78), height: Math.round(cim.h * 3.78) } })] : [] })] });
+              }
+              return cell(cellText(c, row, ctx), { valign: c.valign || wva, align: c.align, bold: c.bold || st.bold, color: st.color || c.color,
                                                    fill: st.fill || (ri % 2 === 1 && sec.zebra !== false ? th.zebra : null) });
             }) }));
           });
           if (aggList(sec.totals).length && rows.length) {
             wordAgg(aggRow(cols, aggList(sec.totals), rows, totText(sec, ctx, rows))).forEach(function (tr) { trs2.push(tr); });
           }
-          var wts = cols.map(function (c) { return c.width ? c.width / 20 : 1; }), tw = wts.reduce(function (a, b) { return a + b; }, 0);
+          var wts = cols.map(function (c, ci) { return c.width ? c.width / 20 : (wImW[ci] ? Math.max(1, (wImW[ci] + 4) / 20) : 1); }), tw = wts.reduce(function (a, b) { return a + b; }, 0);
           var cws = wts.map(function (x) { return Math.floor(usable * x / tw); });
           kids.push(new D.Table({ rows: trs2, width: { size: usable, type: D.WidthType.DXA }, columnWidths: cws,
                                   borders: sec.grid === false ? noB : gridOf(sec.grid ? (sec.borderColor || GRID_LINE) : null) }), spacer());
@@ -2578,6 +2860,9 @@ window.novaReport = (function () {
         if (s.type === 'grafico' && l.indexOf('chartjs') < 0) { l.push('chartjs'); }
         if (s.type === 'formulario' && l.indexOf('jszip') < 0) { l.push('jszip'); }   /* Word: controles de contenido */
         if (s.type === 'columnas') { (s.cols || []).forEach(scan); }
+        if (SPLIT_TYPES[s.type]) { scan((s.fields || []).map(function (f) { return f && f.block; })); }
+        if (s.type === 'grupo') { scan(s.sections); }
+        if (s.type === 'tabla') { scan((s.columns || []).map(function (c) { return c && c.cell; })); }
       });
     }
     scan(layout.sections);

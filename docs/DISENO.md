@@ -7,7 +7,7 @@ El diseño describe **qué** se dibuja; las [fuentes SQL](API.md#3-fuentes-sql) 
 - [Formatos de valor](#formatos-de-valor)
 - [Condiciones](#condiciones)
 - [Marca de agua](#marca-de-agua)
-- [Secciones](#secciones): [header](#header) · [tarjetas](#tarjetas) · [ficha](#ficha) · [tabla](#tabla) · [alerta](#alerta) · [texto](#texto) · [imagen](#imagen) · [grafico](#grafico) · [codigo](#codigo) · [formulario](#formulario) · [linea](#linea) · [columnas](#columnas) · [espacio y salto](#espacio-y-salto)
+- [Secciones](#secciones): [header](#header) · [tarjetas](#tarjetas) · [ficha](#ficha) · [tabla](#tabla) · [alerta](#alerta) · [texto](#texto) · [imagen](#imagen) · [grafico](#grafico) · [codigo](#codigo) · [formulario](#formulario) · [linea](#linea) · [columnas](#columnas) · [grupo](#grupo) · [espacio y salto](#espacio-y-salto)
 - [Qué soporta cada formato](#qué-soporta-cada-formato)
 - [Excel: hojas](#excel-hojas)
 - [Lotes y resumen](#lotes-y-resumen)
@@ -359,6 +359,29 @@ Se combina con `span` y huecos. En una misma fila pueden convivir campos con la 
 | `value` | Columna calculada con plantilla: `"{NOMBRE} ({CODIGO})"`. Se exporta como texto. |
 | `cellStyle` | Reglas para la celda: `when`, `fill`, `color`, `bold`. Tiene prioridad sobre `rowStyle`. |
 | `when` | La columna solo aparece si se cumple la [condición](#condiciones), evaluada por documento (no por fila). Si oculta columnas, revise `groups`. |
+| `valign` | Alineación vertical de las celdas de esta columna (`top`, `middle`, `bottom`). Tiene prioridad sobre el `valign` de la tabla. |
+| `cell` | Contenido de la celda por fila: código QR o de barras, imagen, gráfico o texto. Ver [bloques en celdas](#bloques-en-celdas). |
+
+#### Bloques en celdas
+
+```json
+"columns": [
+  { "col": "EMPNO", "label": "QR", "cell": { "type": "codigo", "kind": "qr", "value": "EMP-{EMPNO}", "size": 12 } },
+  { "label": "Empleado", "cell": { "type": "texto", "text": "{ENAME} ({JOB})" } },
+  { "label": "Foto", "cell": { "type": "imagen", "field": "FOTO", "height": 10 } },
+  { "label": "Barras", "cell": { "type": "codigo", "kind": "code128", "value": "{EMPNO}", "width": 25, "height": 6 } },
+  { "label": "Ventas", "cell": { "type": "grafico", "chart": "line", "source": "VENTAS",
+                                 "link": { "EMPNO": "EMPNO" }, "category": "MES", "series": ["MONTO"] } } ]
+```
+
+| `cell.type` | Propiedades | Notas |
+|---|---|---|
+| `codigo` | `kind` (`qr`, `code128`), `value` (plantilla con columnas de la fila), `size` (QR, defecto 14 mm), `width` / `height` (barras, 30 × 8 mm), `ecc`, `color` | El texto bajo las barras no se dibuja dentro de la celda. |
+| `imagen` | `field` (columna BLOB de la fila) o `url` (igual para todas), `width` (defecto 15 mm) / `height` | PNG o JPG. Una imagen inválida deja la celda vacía. |
+| `grafico` | Las de [`grafico`](#grafico) + `link` y `filter`; `width` / `height` (defecto 40 × 15 mm) | `link: { "COL_FUENTE": "COL_FILA" }` toma solo las filas de la fuente que coinciden con la fila de la tabla. `filter` admite `{COL}` de la fila: `"EMPNO == {EMPNO}"`. Un gráfico por fila: úselo con pocas filas. |
+| `texto` | `text` (plantilla) | Igual que `value`; se exporta como texto. |
+
+Con celdas de imagen o código, las filas se centran en vertical; `valign` en la tabla (`top`, `middle`, `bottom`) lo cambia para todas las tablas. La columna toma el ancho del contenido (PDF: el mayor entre `width` y la imagen; Word: peso según el ancho; Excel: ancho y alto de fila ajustados). La alineación por defecto es centrada; `align` la cambia. Excel coloca la imagen sobre la celda (la celda queda vacía).
 
 **Encabezado agrupado:**
 
@@ -545,6 +568,7 @@ Campos **editables** (texto, texto de varias líneas, lista y casilla de verific
 | `fields[].readOnly` | `false` | Campo de solo lectura. |
 | `fields[].span` | `1` | Casillas que ocupa (`2`, `3`… o `"row"`). Ver [huecos y campos anchos](#ficha). |
 | `{ "empty": true }` | — | Hueco en la grilla. Ver [huecos y campos anchos](#ficha). |
+| `{ "block": { … } }` | — | Bloque entre los campos (1.18): `tabla`, `ficha`, `tarjetas`, `texto`, `imagen`, `codigo`, `alerta`, `linea`, `grafico` o `espacio`. Ocupa una fila completa. Ver abajo. |
 | `labelPosition`, `labelSize`, `labelColor`, `labelFill`, `labelBold`, `labelCase`, `labelAlign` | — | En la sección y en cada campo. Ver [posición y estilo de la etiqueta](#ficha). |
 | `form.protect` | `true` | Protege el documento para que solo se editen los campos (Word: *solo formularios*; Excel: hoja protegida con las celdas de los campos desbloqueadas). |
 | `form.password` | — | Contraseña de la protección (Word y Excel). `run({ formPassword })` tiene prioridad. En Word: 1 a 15 caracteres ASCII. |
@@ -552,6 +576,17 @@ Campos **editables** (texto, texto de varias líneas, lista y casilla de verific
 - **PDF:** campos AcroForm (`NeedAppearances`). La protección del PDF no se cifra.
 - **Word:** controles de contenido (texto, lista desplegable, casilla).
 - **Excel:** celdas con nombre definido, validación de datos (lista, largo máximo) y casilla `☐` / `☒`. Las listas largas van a una hoja oculta `nr_listas`.
+
+**Bloques dentro del formulario** (1.18):
+
+```json
+{ "type": "formulario", "columns": 2, "fields": [
+  { "label": "Nombre", "name": "NOMBRE" }, { "label": "Código", "name": "CODIGO" },
+  { "span": "row", "block": { "type": "tabla", "source": "DETALLE", "columns": ["PRODUCTO", "CANTIDAD"] } },
+  { "label": "Notas", "name": "NOTAS", "input": "multiline", "span": "row" } ] }
+```
+
+Funciona igual en **`ficha`** y **`tarjetas`** (por ejemplo, un QR entre los campos de una ficha). La sección se parte en tramos (campos, bloque, campos) con la misma configuración; el título, si lo hay, va en el primer tramo. Un bloque sin `source` toma la de la sección. Un `when` en el campo se pasa al bloque si este no tiene uno. No se admite `formulario` como bloque; sí `columnas` y [`grupo`](#grupo).
 
 ### `linea`
 
@@ -586,11 +621,45 @@ Pone 2 o 3 casillas **lado a lado**; cada casilla lleva sus propias secciones. S
 | `colGap` | `4` | Espacio entre casillas en mm. |
 | `gap` | `1` | Espacio después de la fila en mm (PDF). |
 
-- Dentro de una casilla solo van `ficha`, `texto`, `imagen`, `codigo`, `alerta`, `linea`, `tabla`, `grafico` y `espacio`. Otras secciones (`header`, `salto`, otra `columnas`) se ignoran, igual que `x`/`y`.
+- Dentro de una casilla van `ficha`, `formulario`, `tarjetas`, `texto`, `imagen`, `codigo`, `alerta`, `linea`, `tabla`, `grafico`, `espacio` y, desde 1.19, otra `columnas` o un [`grupo`](#grupo). `header` y `salto` se ignoran, igual que `x`/`y`.
 - Las imágenes, gráficos y códigos más anchos que la casilla se reducen a su ancho.
 - La fila **no se parte entre páginas**: si no cabe, pasa completa a la siguiente. Si ni en una página completa cabe, las casillas se apilan. Las tablas largas van a ancho completo, fuera de las columnas.
 - Cada sección dentro de una casilla admite `when` y `formats`; la fila completa también.
 - **PDF**: cada casilla en su franja. **Word**: tabla sin bordes, una celda por casilla. **Excel**: cada casilla ocupa un bloque de columnas de la hoja, una al lado de la otra (sin filtro ni panel inmovilizado dentro de las casillas).
+
+### `grupo`
+
+Contenedor (1.19): agrupa cualquier sección dentro de un marco con título, fondo, borde y margen interno. Admite `ficha`, `formulario`, `tarjetas`, `tabla`, `texto`, `imagen`, `codigo`, `grafico`, `alerta`, `linea`, `espacio`, `columnas` y otro `grupo`, a cualquier nivel.
+
+```json
+{ "type": "grupo", "title": "Datos del cliente", "border": true, "fill": "#F5F7FA", "padding": 3, "sections": [
+  { "type": "ficha", "source": "CLIENTE", "columns": 2, "fields": [ ... ] },
+  { "type": "columnas", "cols": [ [ { "type": "texto", "text": "..." } ], [ { "type": "codigo", "value": "{CODIGO}" } ] ] } ] }
+```
+
+**Repetir por fila** (como el *repeating frame* de Oracle Reports): con `each` y `source`, el grupo se dibuja una vez por cada fila. Dentro, esa fuente queda con la fila actual, sus columnas se leen como `{COL}` en cualquier sección, y `link` filtra otras fuentes por la fila:
+
+```json
+{ "type": "grupo", "source": "EMP", "each": true, "title": "Colaborador {ENAME}", "border": true,
+  "link": { "VENTAS": { "EMPNO": "EMPNO" } },
+  "sections": [
+    { "type": "ficha", "source": "EMP", "columns": 2, "fields": [ { "label": "Puesto", "value": "{JOB}" } ] },
+    { "type": "tabla", "source": "VENTAS", "columns": ["MES", "MONTO"], "totals": ["MONTO"] } ] }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `sections` | — | Secciones del grupo. Una sección sin `source` toma la del grupo. |
+| `title` | — | Banda de título (plantilla). `titleFill`, `titleColor`, `titleSize`. |
+| `border` | `false` | Borde exterior. `borderColor`, `borderWidth` (PDF, mm). |
+| `fill` | — | Fondo. En Excel, solo las celdas sin fondo propio. |
+| `padding` | `3` con borde o fondo, si no `0` | Margen interno en mm. |
+| `keepTogether` | `true` | PDF: si el grupo cabe en una página, no se parte. Si no cabe ni en una página completa, sigue en la siguiente sin marco. |
+| `source`, `each` | — | Repetir el grupo por cada fila de la fuente. `filter` y `max` limitan las filas. |
+| `link` | — | `{ "FUENTE": { "COL_FUENTE": "COL_FILA" } }`: cada repetición ve solo las filas relacionadas. |
+
+- Los campos de un `formulario` dentro de un grupo repetido llevan `_1`, `_2`… por repetición.
+- **PDF:** marco dibujado alrededor del contenido. **Word:** tabla de una celda (título en su propia fila). **Excel:** banda de título, secciones y borde exterior del bloque.
 
 ### `espacio` y `salto`
 
@@ -619,6 +688,10 @@ Pone 2 o 3 casillas **lado a lado**; cada casilla lleva sus propias secciones. S
 | `tabla.groups` | ✓ | ✓ | ✓ |
 | `tabla.headAlign`, `grid`, `totalsColor` | ✓ | ✓ | ✓ |
 | `tabla.repeatHeader` | ✓ | — | siempre |
+| `tabla.columns[].cell` (código, imagen, gráfico, texto por fila) | ✓ | ✓ imagen sobre la celda | ✓ |
+| `formulario` / `ficha` / `tarjetas`: `fields[].block` | ✓ | ✓ | ✓ |
+| `grupo` (marco, repetición por fila, anidado) | ✓ | ✓ | ✓ |
+| `columnas` dentro de `columnas` o `grupo` | ✓ | ✓ | ✓ |
 | `alerta` | ✓ | ✓ | ✓ |
 | `texto` enriquecido | ✓ | ✓ | ✓ |
 | `texto` / `imagen` / `grafico` / `codigo` con `x`, `y` | ✓ | — | se ignora la posición |
