@@ -1,5 +1,5 @@
 /*!
- * novaReport 1.19.0 - Reportes PDF / Excel / Word para Oracle APEX
+ * novaReport 1.20.0 - Reportes PDF / Excel / Word para Oracle APEX
  * https://github.com/danielramirezasyn/novareport - Licencia MIT
  * NovaCode - plugin de Acción Dinámica COM.NOVACODE.NOVAREPORT
  *
@@ -10,7 +10,7 @@
 window.novaReport = (function () {
   'use strict';
 
-  var VERSION = '1.19.0';
+  var VERSION = '1.20.0';
 
   /* ------------------------------------------------------------------ librerías */
   var LIBS = {
@@ -82,6 +82,7 @@ window.novaReport = (function () {
   function fmt(v, f) {
     if (v === null || v === undefined || v === '') { return ''; }
     if (!f) { return String(v); }
+    if (isMask(f)) { return maskFmt(v, f); }
     var p = f.split(':'), k = p[0];
     if (k === 'money' || k === 'num') {
       var d = p[1] !== undefined ? +p[1] : 2, n = Number(v);
@@ -97,6 +98,94 @@ window.novaReport = (function () {
   }
   /* Formatos que siempre producen texto (Excel no deja el número) */
   function textFmt(f) { return /^(upper|lower|yn|letras)(:|$)/.test(f || ''); }
+
+  /* 1.20: máscara numérica estilo Excel -> mask:B/. #,##0.00;(B/. #,##0.00);"-"
+     Secciones: positivo;negativo;cero. Literales sueltos o entre comillas, \x escapa un carácter,
+     % multiplica por 100, comas al final del entero dividen entre 1000, [Red] y similares se ignoran.
+     PDF/Word la aplican aquí; Excel recibe el mismo formato en numFmt (la celda sigue siendo número). */
+  var MASK_C = {};
+  function maskSecs(src) {
+    var out = [], cur = '', q = false;
+    for (var i = 0; i < src.length; i++) {
+      var ch = src.charAt(i);
+      if (ch === '\\' && !q) { cur += ch + (src.charAt(i + 1) || ''); i++; continue; }
+      if (ch === '"') { q = !q; }
+      if (ch === ';' && !q) { out.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    out.push(cur);
+    return out;
+  }
+  function maskSec(src) {
+    var toks = [], num = null, done = false, lit = '', pct = false, i, ch;
+    var flush = function () { if (lit) { toks.push({ t: 'l', v: lit }); lit = ''; } };
+    for (i = 0; i < src.length; i++) {
+      ch = src.charAt(i);
+      if (ch === '"') { var e = src.indexOf('"', i + 1); if (e < 0) { e = src.length; } lit += src.slice(i + 1, e); i = e; continue; }
+      if (ch === '\\') { lit += src.charAt(i + 1); i++; continue; }
+      if (ch === '[') { var b = src.indexOf(']', i); if (b > 0) { flush(); toks.push({ t: 'x', v: src.slice(i, b + 1) }); i = b; continue; } }
+      if (ch === '_') { lit += ' '; i++; continue; }
+      if (ch === '*') { i++; continue; }
+      if (!done && /[#0?,.]/.test(ch) && (num !== null || /[#0?]/.test(ch) || (ch === '.' && /[#0?]/.test(src.charAt(i + 1))))) {
+        if (num === null) { flush(); num = ''; toks.push({ t: 'n' }); }
+        num += ch; continue;
+      }
+      if (num !== null) { done = true; }
+      if (ch === '%') { pct = true; }
+      lit += ch;
+    }
+    flush();
+    num = num || '';
+    var endC = (/,+$/.exec(num) || [''])[0].length, core = num.slice(0, num.length - endC);
+    var dot = core.indexOf('.'), ip = dot < 0 ? core : core.slice(0, dot), dp = dot < 0 ? '' : core.slice(dot + 1);
+    var trail = (/,+$/.exec(ip) || [''])[0].length + endC;
+    ip = ip.slice(0, ip.length - trail);
+    return { toks: toks, raw: num, hasNum: !!num, pct: pct, scale: Math.pow(1000, trail),
+             group: ip.indexOf(',') >= 0, minInt: (ip.match(/0/g) || []).length,
+             maxDec: (dp.match(/[#0?]/g) || []).length, minDec: (dp.match(/0/g) || []).length };
+  }
+  function maskOf(f) {
+    var src = maskSrc(f);
+    if (!MASK_C[src]) { MASK_C[src] = maskSecs(src).map(maskSec); }
+    return MASK_C[src];
+  }
+  function maskFmt(v, f) {
+    var n = Number(v);
+    if (v === null || v === undefined || v === '' || isNaN(n)) { return v === null || v === undefined ? '' : String(v); }
+    var secs = maskOf(f), s = secs[0], neg = false;
+    if (n < 0 && secs.length > 1 && secs[1].toks.length) { s = secs[1]; n = -n; }
+    else if (n < 0) { neg = true; n = -n; }
+    if (n === 0 && secs.length > 2 && secs[2].toks.length) { s = secs[2]; neg = false; }
+    if (s.pct) { n = n * 100; }
+    n = n / s.scale;
+    var r = Number(n.toFixed(s.maxDec));
+    if (r === 0) { neg = false; }
+    var txt = r.toLocaleString('en-US', { useGrouping: s.group, minimumIntegerDigits: Math.max(1, Math.min(21, s.minInt)),
+                                          minimumFractionDigits: s.minDec, maximumFractionDigits: s.maxDec });
+    if (!s.minInt && /^0(\.|$)/.test(txt)) { txt = txt.slice(1); }
+    var out = s.toks.map(function (t) { return t.t === 'n' ? txt : (t.t === 'x' ? '' : t.v); }).join('');
+    return neg ? '-' + out : out;
+  }
+  /* Formato Excel equivalente a la máscara: literales siempre entre comillas */
+  function maskXl(f) {
+    return maskSecs(maskSrc(f)).map(function (src) {
+      var s = maskSec(src);
+      return s.toks.map(function (t) {
+        if (t.t === 'n') { return s.raw; }
+        if (t.t === 'x') { return t.v; }
+        return t.v.split('%').map(function (x) { return x ? '"' + x.replace(/"/g, '') + '"' : ''; }).join('%');
+      }).join('') || '""';
+    }).join(';');
+  }
+  /* mask:... o una máscara escrita sin prefijo (B/. #,##0.00): cualquier formato que no sea una palabra conocida y tenga # o 0 */
+  var FMT_KEYS = /^(money|num|int|pct|date|upper|lower|yn|letras)(:|$)/;
+  function isMask(f) { f = f || ''; return /^mask:/.test(f) || (!FMT_KEYS.test(f) && /[#0]/.test(f)); }
+  function maskSrc(f) { f = String(f); return /^mask:/.test(f) ? f.slice(5) : f; }
+  /* numFmt de Excel para una columna numérica de tabla */
+  function xlNumFmt(f) {
+    if (isMask(f)) { return maskXl(f); }
+    return f === 'int' ? '#,##0' : (f === 'money' || /^num/.test(f || '') ? '#,##0.' + new Array(((f || '').split(':')[1] || 2) * 1 + 1).join('0') : 'General');
+  }
 
   /* Monto en letras: letras -> MIL DOSCIENTOS TREINTA Y CUATRO CON 50/100; letras:BALBOA/BALBOAS -> ... BALBOAS CON 50/100 */
   var L_U = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE', 'DIEZ', 'ONCE', 'DOCE', 'TRECE',
@@ -159,7 +248,7 @@ window.novaReport = (function () {
   }
   function tpl(str, ctx, row) {
     if (str === null || str === undefined) { return ''; }
-    return String(str).replace(/\{([A-Za-z0-9_$#.]+)(?:\|([A-Za-z0-9:/ÁÉÍÓÚÑÜáéíóúñü]+))?\}/g, function (m, k, f) {
+    return String(str).replace(/\{([A-Za-z0-9_$#.]+)(?:\|(mask:[^}]+|[A-Za-z0-9:/ÁÉÍÓÚÑÜáéíóúñü]+|[^}]*[#0][^}]*))?\}/g, function (m, k, f) {
       var v = lookup(ctx, k, row);
       return v === undefined || v === null ? '' : fmt(v, f);
     });
@@ -270,9 +359,9 @@ window.novaReport = (function () {
                label: c.label !== undefined ? c.label : label(name || ''), cell: ci,
                valign: /^(top|middle|bottom)$/.test(String(c.valign || '').toLowerCase()) ? String(c.valign).toLowerCase() : null,
                fmt: f, map: c.map, bold: !!c.bold, width: c.width,
-               align: c.align || (ci ? 'center' : null) || (textFmt(f) ? 'left' : (t === 'NUMBER' || f === 'money' || f === 'int' || f === 'num' ? 'right' : (t === 'DATE' || f === 'date' ? 'center' : 'left'))),
+               align: c.align || (ci ? 'center' : null) || (textFmt(f) ? 'left' : (t === 'NUMBER' || f === 'money' || f === 'int' || f === 'num' || isMask(f) ? 'right' : (t === 'DATE' || f === 'date' ? 'center' : 'left'))),
                cellStyle: c.cellStyle, color: c.color, headAlign: c.headAlign,
-               isNum: !ci && !textFmt(f) && ((t === 'NUMBER' && !c.map && !c.value) || f === 'money' || f === 'int' || /^num/.test(f || '')) };
+               isNum: !ci && !textFmt(f) && ((t === 'NUMBER' && !c.map && !c.value) || f === 'money' || f === 'int' || /^num/.test(f || '') || isMask(f)) };
     });
   }
   function groupsOf(sec, cols) {
@@ -1928,7 +2017,7 @@ window.novaReport = (function () {
                 if (sec.grid) { vc.border = xlsBorder(sec.borderColor); }
               }
               var raw = (/^\{[^}|]+\}$/.test(f.value || '') && !f.map) ? lookup(ctx, f.value.slice(1, -1), fr) : null;
-              if (isNum(raw) && !textFmt(f.fmt)) { vc.value = raw; if (f.fmt === 'money') { vc.numFmt = '#,##0.00'; } vc.alignment = { horizontal: 'left' }; }
+              if (isNum(raw) && !textFmt(f.fmt)) { vc.value = raw; if (f.fmt === 'money') { vc.numFmt = '#,##0.00'; } else if (isMask(f.fmt)) { vc.numFmt = maskXl(f.fmt); } vc.alignment = { horizontal: 'left' }; }
               else if (f.fmt === 'date' && parseDate(raw)) { vc.value = parseDate(raw); vc.numFmt = 'dd/mm/yyyy'; vc.alignment = { horizontal: 'left' }; }
               else { vc.value = fieldText(f, ctx, fr); }
               if (sec.grid) { vc.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }; }
@@ -2072,10 +2161,10 @@ window.novaReport = (function () {
                 var dt = (a.fn === 'min' || a.fn === 'max') && v !== null && !numLike(v) ? parseDate(v) : null;
                 var res = v === null || v === undefined ? null : (dt || (numLike(v) ? Math.round(Number(v) * 100) / 100 : String(v)));
                 cell.value = { formula: (sub ? 'SUBTOTAL(' + AGG_XL[a.fn] + ',' : AGG_FX[a.fn] + '(') + rng + ')', result: res };
-                var nf = a.fn === 'count' ? '#,##0' : (dt ? 'dd/mm/yyyy' : '#,##0.00');
+                var nf = a.fn === 'count' ? '#,##0' : (dt ? 'dd/mm/yyyy' : (isMask(c.fmt) ? maskXl(c.fmt) : '#,##0.00'));
                 cell.numFmt = mixed && AGG_PRE[a.fn] ? '"' + AGG_PRE[a.fn] + ' "' + nf : nf;
                 cell.alignment = { horizontal: 'right' };
-                if (res !== null && !dt) { setW(i + 1, numLike(res) ? fmt(res, 'money') : res); }
+                if (res !== null && !dt) { setW(i + 1, numLike(res) ? fmt(res, isMask(c.fmt) && a.fn !== 'count' ? c.fmt : 'money') : res); }
               });
               return r0 + 1;
             };
@@ -2110,7 +2199,7 @@ window.novaReport = (function () {
                 }
                 if (c.isNum && isNum(raw)) {
                   cell.value = raw;
-                  cell.numFmt = c.fmt === 'int' ? '#,##0' : (c.fmt === 'money' || /^num/.test(c.fmt || '') ? '#,##0.' + new Array(((c.fmt || '').split(':')[1] || 2) * 1 + 1).join('0') : 'General');
+                  cell.numFmt = xlNumFmt(c.fmt);
                 } else if ((c.fmt === 'date' || (ctx.T[String(sec.source).toUpperCase()] || {})[c.col] === 'DATE') && parseDate(raw)) {
                   cell.value = parseDate(raw); cell.numFmt = 'dd/mm/yyyy';
                 } else {

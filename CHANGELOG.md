@@ -1,12 +1,19 @@
 # Cambios
 
+## 1.20.0
+- Formato **`mask:`**: máscara numérica estilo Excel para símbolo de moneda, decimales, miles y negativos. Ej.: `mask:B/. #,##0.00;(B/. #,##0.00);"-"` (positivo;negativo;cero), `mask:#,##0.000 "USD"`, `mask:0.0%`, `mask:#,##0.0,, "M"`, `mask:000000`. Sirve en `fmt` de columnas, totales, ficha y formulario, y en plantillas `{COL|mask:…}`. El prefijo `mask:` es opcional (`B/. #,##0.00`).
+- PDF y Word aplican la máscara en el plugin; Excel recibe el mismo formato en `numFmt`, así la celda sigue siendo número y los totales (`SUMA`, `PROMEDIO`…) toman el formato de la columna.
+- Sin cambios para diseños existentes: los archivos de prueba de 1.19.0 salen idénticos byte a byte.
+- Designer 0.18.0: el campo **Formato** sugiere máscaras listas (B/., $, €, 3-4 decimales, negativos entre paréntesis, porcentaje, millones, ceros a la izquierda) y acepta cualquier máscara escrita a mano.
+
 ## 1.19.0
 - Sección **`grupo`**: contenedor con título, borde, fondo y margen interno que admite cualquier sección (incluidos `columnas` y otro `grupo`). PDF, Excel y Word.
 - **Repetir por fila**: `grupo` con `source` + `each` se dibuja una vez por fila (como el *repeating frame* de Oracle Reports). Las columnas de la fila se leen como `{COL}` y `link` filtra fuentes relacionadas. Los campos de formularios repetidos llevan `_1`, `_2`…
 - Una sección dentro de un grupo sin `source` toma la del grupo.
 - **Anidamiento libre**: `columnas` dentro de `columnas`, `grupo` dentro de `columnas`, y `columnas` o `grupo` como bloque dentro de formulario, ficha o tarjetas.
 - Sin cambios para diseños existentes: los archivos de prueba de 1.17.0 salen idénticos byte a byte.
-- Designer 0.17.0: componente Grupo en la barra; se puede arrastrar cualquier componente dentro de grupos y columnas a cualquier nivel (y sacarlo); propiedades del grupo con repetición por fila.
+- Documentado `page.size: [ancho, alto]` (mm, solo PDF). Ejemplos nuevos: `10-reclamo-gastos-medicos` y `11-cheque`.
+- Designer 0.17.0: componente Grupo en la barra; se puede arrastrar cualquier componente dentro de grupos y columnas a cualquier nivel (y sacarlo); propiedades del grupo con repetición por fila; selector para cambiar de reporte junto al nombre; tamaño de página personalizado.
 
 ## 1.18.0
 - **Bloques en celdas de tabla**: `columns[].cell` con `type` `codigo` (QR o Code 128), `imagen` (columna BLOB de la fila o URL), `grafico` (por fila, con `link` o `filter` para tomar solo las filas relacionadas) o `texto` (plantilla). La columna se ajusta al contenido. PDF, Excel (imagen sobre la celda) y Word.

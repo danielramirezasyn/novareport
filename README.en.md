@@ -1,6 +1,6 @@
 # novaReport — PDF, Excel and Word for Oracle APEX
 
-[![Version](https://img.shields.io/badge/version-1.19.0-1F4E79)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.20.0-1F4E79)](CHANGELOG.md)
 [![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requirements)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -204,7 +204,7 @@ select h.empno doc_key, h.change_date, h.position from history h
 | `espacio` / `salto` | Vertical space / page break | `height` |
 
 **Templates:** `{COL}`, `{SOURCE.COL}`, `{DOC.COL}`, `{PARAM.X}`, `{ITEM.P1_X}`, `{NOW}`, `{TODAY}`, `{PAGE}`/`{PAGES}` (footer), `{COL|format}`.
-**Formats:** `money`, `num:N`, `int`, `pct`, `date`, `upper`, `lower`, `yn` (`Y`/`S` → Sí), `letras` / `letras:BALBOA/BALBOAS` (amount in Spanish words).
+**Formats:** `money`, `num:N`, `int`, `pct`, `date`, `upper`, `lower`, `yn` (`Y`/`S` → Sí), `letras` / `letras:BALBOA/BALBOAS` (amount in Spanish words), `mask:` Excel-style mask such as `mask:B/. #,##0.00;(B/. #,##0.00)` (currency symbol, decimals, negatives; stays numeric in Excel).
 **Any section:** `when` (show only if the condition holds), `formats` (`["pdf", "docx"]`).
 **Conditions:** `COL == 'X'`, `!=`, `>`, `<`, `>=`, `<=`, `COL`, `!COL`, joined with `&&` / `||`.
 **Rich text:** `**bold**`, `*italic*`, `***both***`, `~~strike~~`, `++underline++`, `[f=times]font[/f]`, `[c=#AA1E1E]color[/c]`.

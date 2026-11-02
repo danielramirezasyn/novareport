@@ -45,7 +45,7 @@ Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) es
 
 | Propiedad | Defecto | Descripción |
 |---|---|---|
-| `page.size` | `letter` | `letter`, `legal` o `a4` (en PDF también otros formatos de jsPDF, como `a3`). |
+| `page.size` | `letter` | `letter`, `legal` o `a4` (en PDF también otros formatos de jsPDF, como `a3`). Solo PDF: tamaño propio en mm, `[ancho, alto]`; con `orientation: "landscape"` el lado mayor queda horizontal (p. ej. un cheque `[210, 99]`). Excel y Word usan carta. |
 | `page.orientation` | `portrait` | `portrait` o `landscape`. |
 | `page.margin` | `8` (PDF), `12.7` (Word) | Margen en mm. Excel ajusta la impresión a una página de ancho. |
 | `page.font` | `helvetica` | Letra por defecto de `texto`: `helvetica`, `times` o `courier` (alias: `arial`, `serif`, `mono`). |
@@ -102,10 +102,25 @@ Se usan en `{COL|formato}` o en la propiedad `"fmt"` de columnas y campos.
 | `yn` | `Y`, `S` / `N` | `Sí` / `No` | texto |
 | `letras` | `1234.5` | `MIL DOSCIENTOS TREINTA Y CUATRO CON 50/100` | texto |
 | `letras:BALBOA/BALBOAS` | `1` / `21.07` | `UN BALBOA CON 00/100` / `VEINTIÚN BALBOAS CON 07/100` | texto |
+| `mask:B/. #,##0.00` | `1234.5` | `B/. 1,234.50` | número con el mismo formato |
+| `mask:$#,##0.00;($#,##0.00)` | `-1234.5` | `($1,234.50)` | número |
+| `mask:#,##0.00;-#,##0.00;"-"` | `0` | `-` | número |
+| `mask:#,##0.000 "USD"` | `12.3456` | `12.346 USD` | número |
+| `mask:0.0%` | `0.125` | `12.5%` | número |
+| `mask:#,##0.0,, "M"` | `1234567` | `1.2 M` | número |
+| `mask:000000` | `42` | `000042` | número |
 
-- Los números usan coma para miles y punto para decimales.
+- Los números usan coma para miles y punto para decimales (en Excel, los separadores los pone la configuración regional del equipo).
 - `pct` no multiplica por 100: espera el porcentaje ya calculado.
 - `letras` redondea a 2 decimales. Con moneda, `singular/plural` (`letras:DÓLAR/DÓLARES`) o un solo nombre (`letras:BALBOAS`). Agrega `DE` tras millones (`UN MILLÓN DE BALBOAS`). Negativos: `MENOS …`. En Excel queda como texto.
+- **`mask:`** (1.20) es una máscara estilo Excel, igual en PDF, Excel y Word. En Excel la celda sigue siendo número (los totales suman) y recibe el mismo formato.
+  - Secciones separadas por `;`: `positivo;negativo;cero`. Con una sola sección, los negativos llevan `-` delante.
+  - `0` dígito obligatorio, `#` opcional, `,` separador de miles, `.` decimales. Comas al final del número dividen entre 1000 (`#,##0,` → miles).
+  - Texto libre antes o después (`B/. `, `USD`, `€`), o entre comillas si tiene dígitos o `#`: `"Nro. "000`. `\x` escapa un carácter.
+  - `%` multiplica por 100 (como Excel); `pct` no.
+  - `[Red]` y similares solo aplican en Excel.
+  - El prefijo `mask:` es opcional: `B/. #,##0.00` también funciona (cualquier formato que no sea una palabra de la tabla y tenga `#` o `0`).
+  - En plantillas: `{SALDO|mask:B/. #,##0.00}` o `{SALDO|B/. #,##0.00}`.
 - Una columna `NUMBER` sin `fmt` usa `money` si alguna fila tiene decimales; si todas son enteras, se muestra tal cual.
 - Cualquier otro valor de `fmt` deja el valor sin cambios (en Excel, número con formato *General*).
 

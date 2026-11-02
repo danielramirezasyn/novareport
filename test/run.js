@@ -400,4 +400,33 @@ fs.mkdirSync(OUT, { recursive: true });
       console.log('OK  ', 'grupos-119__' + format + '__' + r.name);
     }
   }
+  /* 1.20: máscaras numéricas (mask:) en tabla, totales, ficha y texto */
+  {
+    const d = { DOCS: { cols: [U('SALDO'), U('TASA')], rows: [[-1250.5, 0.0625]] },
+                MOVS: { cols: [N('CONCEPTO'), U('DEBITO'), U('CREDITO'), U('SALDO')],
+                        rows: [['Apertura', 0, 1500, 1500], ['Pago', 250.75, 0, 1249.25], ['Ajuste', 1300, 0, -50.75]] } };
+    const M = 'mask:B/. #,##0.00;(B/. #,##0.00);"-"';
+    const layout = { fileName: 'mascaras-120', sections: [
+      { type: 'tabla', source: 'MOVS', columns: ['CONCEPTO', { col: 'DEBITO', fmt: M }, { col: 'CREDITO', fmt: '$#,##0.000' }, { col: 'SALDO', fmt: M }],
+        totals: ['DEBITO', 'CREDITO'] },
+      { type: 'ficha', fields: [{ label: 'Saldo', value: '{SALDO}', fmt: M }, { label: 'Tasa', value: '{TASA}', fmt: 'mask:0.00%' }] },
+      { type: 'texto', text: ['Saldo {SALDO|mask:B/. #,##0.00;(B/. #,##0.00)} tasa {TASA|0.0%}'] }] };
+    const want = ['(B/. 1,250.50)', '6.25%', 'Saldo (B/. 1,250.50) tasa 6.3%', 'B/. 1,550.75', '$1,500.000', '(B/. 50.75)'];
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const r = await window.novaReport.build({ layout, format, output: 'file', zipType: 'nodebuffer' }, d);
+      const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
+      fs.writeFileSync(path.join(OUT, 'mascaras-120__' + format + '__' + r.name), buf);
+      if (format === 'xlsx') {
+        const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0]; const f = {};
+        ws.eachRow(row => row.eachCell(c => { if (typeof c.value === 'number' || (c.value && c.value.formula)) { f[c.numFmt] = 1; } }));
+        for (const nf of ['"B/. "#,##0.00;"(B/. "#,##0.00")";"-"', '"$"#,##0.000', '0.00%']) { if (!f[nf]) { throw new Error('xlsx numFmt ' + nf + ': ' + Object.keys(f).join(' | ')); } }
+      } else {
+        const t = format === 'docx' ? await (await window.JSZip.loadAsync(buf)).file('word/document.xml').async('string') : null;
+        for (const w of want) {
+          if (format === 'docx' && t.indexOf(w) < 0) { throw new Error('docx falta ' + w); }
+        }
+      }
+      console.log('OK  ', 'mascaras-120__' + format + '__' + r.name);
+    }
+  }
 })().catch(e => { console.error('FALLÓ', e); process.exit(1); });
