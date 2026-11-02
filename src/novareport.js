@@ -1,5 +1,5 @@
 /*!
- * novaReport 1.20.0 - Reportes PDF / Excel / Word para Oracle APEX
+ * novaReport 1.21.0 - Reportes PDF / Excel / Word para Oracle APEX
  * https://github.com/danielramirezasyn/novareport - Licencia MIT
  * NovaCode - plugin de Acción Dinámica COM.NOVACODE.NOVAREPORT
  *
@@ -10,7 +10,7 @@
 window.novaReport = (function () {
   'use strict';
 
-  var VERSION = '1.20.0';
+  var VERSION = '1.21.0';
 
   /* ------------------------------------------------------------------ librerías */
   var LIBS = {
@@ -101,8 +101,9 @@ window.novaReport = (function () {
 
   /* 1.20: máscara numérica estilo Excel -> mask:B/. #,##0.00;(B/. #,##0.00);"-"
      Secciones: positivo;negativo;cero. Literales sueltos o entre comillas, \x escapa un carácter,
-     % multiplica por 100, comas al final del entero dividen entre 1000, [Red] y similares se ignoran.
-     PDF/Word la aplican aquí; Excel recibe el mismo formato en numFmt (la celda sigue siendo número). */
+     % multiplica por 100, comas al final del entero dividen entre 1000, [Red] y similares solo van a Excel.
+     1.21: coma decimal escrita en la máscara (B/. #.##0,00) y modelo de Oracle (ora:FML999G999G990D00;nls=,.).
+     PDF/Word la aplican aquí; Excel recibe el formato equivalente en numFmt (la celda sigue siendo número). */
   var MASK_C = {};
   function maskSecs(src) {
     var out = [], cur = '', q = false;
@@ -136,18 +137,76 @@ window.novaReport = (function () {
     }
     flush();
     num = num || '';
+    /* 1.21: coma decimal (#.##0,00 o 0,00). 0,000 y #,##0 siguen siendo miles, como en Excel */
+    var lc = num.lastIndexOf(','), eu = false;
+    if (lc >= 0 && /^[#0?]+$/.test(num.slice(lc + 1))) {
+      eu = num.indexOf('.') >= 0 ? num.lastIndexOf('.') < lc : num.length - lc - 1 !== 3;
+    }
+    if (eu) { num = num.replace(/[.,]/g, function (c) { return c === '.' ? ',' : '.'; }); }
     var endC = (/,+$/.exec(num) || [''])[0].length, core = num.slice(0, num.length - endC);
     var dot = core.indexOf('.'), ip = dot < 0 ? core : core.slice(0, dot), dp = dot < 0 ? '' : core.slice(dot + 1);
     var trail = (/,+$/.exec(ip) || [''])[0].length + endC;
     ip = ip.slice(0, ip.length - trail);
     return { toks: toks, raw: num, hasNum: !!num, pct: pct, scale: Math.pow(1000, trail),
              group: ip.indexOf(',') >= 0, minInt: (ip.match(/0/g) || []).length,
-             maxDec: (dp.match(/[#0?]/g) || []).length, minDec: (dp.match(/0/g) || []).length };
+             maxDec: (dp.match(/[#0?]/g) || []).length, minDec: (dp.match(/0/g) || []).length,
+             dec: eu ? ',' : '.', grp: eu ? '.' : ',' };
+  }
+  /* 1.21: modelo de formato de Oracle (TO_CHAR) -> máscara.
+     ora:FML999G999G990D00;nls=,.;cur='B/. ';iso=USD
+     Elementos: 9 0 G D , . L U C $ PR MI S B FM. Nunca rellena con espacios; FM además quita los ceros finales de los 9 decimales.
+     nls = carácter decimal y de miles (como NLS_NUMERIC_CHARACTERS); cur = símbolo de L/U; iso = código de C */
+  function oraMask(spec) {
+    var parts = [], cur = '', q = '', i, c;
+    for (i = 0; i < spec.length; i++) {
+      c = spec.charAt(i);
+      if (q) { if (c === q) { q = ''; } else { cur += c; } continue; }
+      if (c === "'" || c === '"') { q = c; continue; }
+      if (c === ';') { parts.push(cur); cur = ''; continue; }
+      cur += c;
+    }
+    parts.push(cur);
+    var model = parts.shift().trim().toUpperCase(), fm = /^FM/.test(model), o = { nls: '.,', cur: '$', iso: 'USD' };
+    parts.forEach(function (p) { var k = p.indexOf('='); if (k > 0) { o[p.slice(0, k).trim().toLowerCase()] = p.slice(k + 1); } });
+    model = model.replace(/^FM/, '');
+    var pr = /PR$/.test(model), mi = !pr && /MI$/.test(model);
+    if (pr || mi) { model = model.slice(0, -2); }
+    var sL = /^S/.test(model), sT = !sL && !pr && !mi && /S$/.test(model);
+    if (sL) { model = model.slice(1); } else if (sT) { model = model.slice(0, -1); }
+    var blank = model.indexOf('B') >= 0, pre = '', post = '', ip = '', dp = '', seenD = false, seenDig = false;
+    model = model.replace(/B/g, '');
+    for (i = 0; i < model.length; i++) {
+      c = model.charAt(i);
+      if (c === '9' || c === '0') { seenDig = true; if (seenD) { dp += c === '9' && fm ? '#' : '0'; } else { ip += c; } }
+      else if (c === 'G' || c === ',') { if (!seenD) { ip += ','; } }
+      else if (c === 'D' || c === '.') { seenD = true; }
+      else if (c === 'L' || c === 'U' || c === 'C' || c === '$') {
+        var lt = c === 'C' ? o.iso : (c === '$' ? '$' : o.cur);
+        if (seenDig) { post += lt; } else { pre += lt; }
+      }
+    }
+    var f0 = ip.indexOf('0');
+    ip = ip.replace(/[90]/g, function (d, k) { return f0 >= 0 && k >= f0 ? '0' : '#'; }).replace(/^,+/, '');
+    var num = ip + (dp ? '.' + dp : '') || '#';
+    var qt = function (s) { return s ? '"' + String(s).replace(/"/g, '') + '"' : ''; };
+    var pos = qt(pre) + num + qt(post), src = pos;
+    if (pr) { src = pos + ';' + qt('<' + pre) + num + qt(post + '>'); }
+    else if (mi) { src = pos + ';' + qt(pre) + num + qt(post + '-'); }
+    else if (sL) { src = qt('+' + pre) + num + qt(post) + ';' + qt('-' + pre) + num + qt(post); }
+    else if (sT) { src = qt(pre) + num + qt(post + '+') + ';' + qt(pre) + num + qt(post + '-'); }
+    if (blank) { if (src === pos) { src += ';' + qt('-' + pre) + num + qt(post); } src += ';""'; }
+    var nls = String(o.nls || '.,');
+    return { src: src, dec: nls.charAt(0) || '.', grp: nls.charAt(1) || ',' };
   }
   function maskOf(f) {
-    var src = maskSrc(f);
-    if (!MASK_C[src]) { MASK_C[src] = maskSecs(src).map(maskSec); }
-    return MASK_C[src];
+    f = String(f);
+    if (!MASK_C[f]) {
+      if (/^ora:/.test(f)) {
+        var o = oraMask(f.slice(4));
+        MASK_C[f] = maskSecs(o.src).map(function (x) { var s = maskSec(x); s.dec = o.dec; s.grp = o.grp; return s; });
+      } else { MASK_C[f] = maskSecs(maskSrc(f)).map(maskSec); }
+    }
+    return MASK_C[f];
   }
   function maskFmt(v, f) {
     var n = Number(v);
@@ -155,7 +214,7 @@ window.novaReport = (function () {
     var secs = maskOf(f), s = secs[0], neg = false;
     if (n < 0 && secs.length > 1 && secs[1].toks.length) { s = secs[1]; n = -n; }
     else if (n < 0) { neg = true; n = -n; }
-    if (n === 0 && secs.length > 2 && secs[2].toks.length) { s = secs[2]; neg = false; }
+    if (n === 0 && secs.length > 2) { s = secs[2]; neg = false; }
     if (s.pct) { n = n * 100; }
     n = n / s.scale;
     var r = Number(n.toFixed(s.maxDec));
@@ -163,13 +222,14 @@ window.novaReport = (function () {
     var txt = r.toLocaleString('en-US', { useGrouping: s.group, minimumIntegerDigits: Math.max(1, Math.min(21, s.minInt)),
                                           minimumFractionDigits: s.minDec, maximumFractionDigits: s.maxDec });
     if (!s.minInt && /^0(\.|$)/.test(txt)) { txt = txt.slice(1); }
+    if (s.dec !== '.' || s.grp !== ',') { txt = txt.replace(/[.,]/g, function (c) { return c === '.' ? s.dec : s.grp; }); }
     var out = s.toks.map(function (t) { return t.t === 'n' ? txt : (t.t === 'x' ? '' : t.v); }).join('');
     return neg ? '-' + out : out;
   }
-  /* Formato Excel equivalente a la máscara: literales siempre entre comillas */
+  /* Formato Excel equivalente: literales entre comillas y separadores en notación de Excel
+     (Excel muestra miles y decimales según la configuración regional del equipo) */
   function maskXl(f) {
-    return maskSecs(maskSrc(f)).map(function (src) {
-      var s = maskSec(src);
+    return maskOf(f).map(function (s) {
       return s.toks.map(function (t) {
         if (t.t === 'n') { return s.raw; }
         if (t.t === 'x') { return t.v; }
@@ -177,9 +237,9 @@ window.novaReport = (function () {
       }).join('') || '""';
     }).join(';');
   }
-  /* mask:... o una máscara escrita sin prefijo (B/. #,##0.00): cualquier formato que no sea una palabra conocida y tenga # o 0 */
+  /* mask:..., ora:... o una máscara escrita sin prefijo (B/. #,##0.00): cualquier formato que no sea una palabra conocida y tenga # o 0 */
   var FMT_KEYS = /^(money|num|int|pct|date|upper|lower|yn|letras)(:|$)/;
-  function isMask(f) { f = f || ''; return /^mask:/.test(f) || (!FMT_KEYS.test(f) && /[#0]/.test(f)); }
+  function isMask(f) { f = f || ''; return /^(mask|ora):/.test(f) || (!FMT_KEYS.test(f) && /[#0]/.test(f)); }
   function maskSrc(f) { f = String(f); return /^mask:/.test(f) ? f.slice(5) : f; }
   /* numFmt de Excel para una columna numérica de tabla */
   function xlNumFmt(f) {
@@ -248,7 +308,7 @@ window.novaReport = (function () {
   }
   function tpl(str, ctx, row) {
     if (str === null || str === undefined) { return ''; }
-    return String(str).replace(/\{([A-Za-z0-9_$#.]+)(?:\|(mask:[^}]+|[A-Za-z0-9:/ÁÉÍÓÚÑÜáéíóúñü]+|[^}]*[#0][^}]*))?\}/g, function (m, k, f) {
+    return String(str).replace(/\{([A-Za-z0-9_$#.]+)(?:\|((?:mask|ora):[^}]+|[A-Za-z0-9:/ÁÉÍÓÚÑÜáéíóúñü]+|[^}]*[#0][^}]*))?\}/g, function (m, k, f) {
       var v = lookup(ctx, k, row);
       return v === undefined || v === null ? '' : fmt(v, f);
     });

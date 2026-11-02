@@ -409,9 +409,10 @@ fs.mkdirSync(OUT, { recursive: true });
     const layout = { fileName: 'mascaras-120', sections: [
       { type: 'tabla', source: 'MOVS', columns: ['CONCEPTO', { col: 'DEBITO', fmt: M }, { col: 'CREDITO', fmt: '$#,##0.000' }, { col: 'SALDO', fmt: M }],
         totals: ['DEBITO', 'CREDITO'] },
-      { type: 'ficha', fields: [{ label: 'Saldo', value: '{SALDO}', fmt: M }, { label: 'Tasa', value: '{TASA}', fmt: 'mask:0.00%' }] },
-      { type: 'texto', text: ['Saldo {SALDO|mask:B/. #,##0.00;(B/. #,##0.00)} tasa {TASA|0.0%}'] }] };
-    const want = ['(B/. 1,250.50)', '6.25%', 'Saldo (B/. 1,250.50) tasa 6.3%', 'B/. 1,550.75', '$1,500.000', '(B/. 50.75)'];
+      { type: 'ficha', fields: [{ label: 'Saldo', value: '{SALDO}', fmt: M }, { label: 'Tasa', value: '{TASA}', fmt: 'mask:0.00%' },
+                                { label: 'Oracle', value: '{SALDO}', fmt: "ora:FML999G990D00PR;nls=,.;cur='B/. '" }] },
+      { type: 'texto', text: ['Saldo {SALDO|mask:B/. #,##0.00;(B/. #,##0.00)} tasa {TASA|0.0%}', 'EU {SALDO|B/. #.##0,00} ORA {SALDO|ora:FM999G990D99MI;nls=,.}'] }] };
+    const want = ['(B/. 1,250.50)', '6.25%', 'Saldo (B/. 1,250.50) tasa 6.3%', 'EU -B/. 1.250,50 ORA 1.250,5-', '&lt;B/. 1.250,50&gt;', 'B/. 1,550.75', '$1,500.000', '(B/. 50.75)'];
     for (const format of ['pdf', 'xlsx', 'docx']) {
       const r = await window.novaReport.build({ layout, format, output: 'file', zipType: 'nodebuffer' }, d);
       const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
@@ -419,7 +420,7 @@ fs.mkdirSync(OUT, { recursive: true });
       if (format === 'xlsx') {
         const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0]; const f = {};
         ws.eachRow(row => row.eachCell(c => { if (typeof c.value === 'number' || (c.value && c.value.formula)) { f[c.numFmt] = 1; } }));
-        for (const nf of ['"B/. "#,##0.00;"(B/. "#,##0.00")";"-"', '"$"#,##0.000', '0.00%']) { if (!f[nf]) { throw new Error('xlsx numFmt ' + nf + ': ' + Object.keys(f).join(' | ')); } }
+        for (const nf of ['"B/. "#,##0.00;"(B/. "#,##0.00")";"-"', '"$"#,##0.000', '0.00%', '"B/. "###,##0.00;"<B/. "###,##0.00">"']) { if (!f[nf]) { throw new Error('xlsx numFmt ' + nf + ': ' + Object.keys(f).join(' | ')); } }
       } else {
         const t = format === 'docx' ? await (await window.JSZip.loadAsync(buf)).file('word/document.xml').async('string') : null;
         for (const w of want) {

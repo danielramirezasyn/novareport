@@ -109,6 +109,10 @@ Se usan en `{COL|formato}` o en la propiedad `"fmt"` de columnas y campos.
 | `mask:0.0%` | `0.125` | `12.5%` | número |
 | `mask:#,##0.0,, "M"` | `1234567` | `1.2 M` | número |
 | `mask:000000` | `42` | `000042` | número |
+| `B/. #.##0,00` | `1234.5` | `B/. 1.234,50` | número |
+| `ora:FML999G999G990D00;nls=,.;cur='B/. '` | `1234.5` | `B/. 1.234,50` | número |
+| `ora:FM999G990D00PR` | `-1234.5` | `<1,234.50>` | número |
+| `ora:FM999G990D00MI` | `-1234.5` | `1,234.50-` | número |
 
 - Los números usan coma para miles y punto para decimales (en Excel, los separadores los pone la configuración regional del equipo).
 - `pct` no multiplica por 100: espera el porcentaje ya calculado.
@@ -121,6 +125,13 @@ Se usan en `{COL|formato}` o en la propiedad `"fmt"` de columnas y campos.
   - `[Red]` y similares solo aplican en Excel.
   - El prefijo `mask:` es opcional: `B/. #,##0.00` también funciona (cualquier formato que no sea una palabra de la tabla y tenga `#` o `0`).
   - En plantillas: `{SALDO|mask:B/. #,##0.00}` o `{SALDO|B/. #,##0.00}`.
+  - **Coma decimal** (1.21): escriba la máscara con punto de miles y coma decimal, `B/. #.##0,00` → `B/. 1.234,50`. Se reconoce cuando hay un punto antes de la última coma, o sin punto cuando tras la coma no hay exactamente 3 dígitos (`0,00`). `0,000` y `#,##0` siguen siendo miles, como en Excel; para 3 decimales con coma use `#.##0,000`.
+- **`ora:`** (1.21) es el modelo de formato de `TO_CHAR` de Oracle; la consulta devuelve el número sin formatear.
+  - Elementos: `9`, `0`, `G`, `D`, `,`, `.`, `L`, `U`, `C`, `$`, `PR` (`<1,234.50>`), `MI` (`1,234.50-`), `S` (`+`/`-`), `B` (cero en blanco) y `FM`.
+  - Opciones separadas por `;`: `nls=,.` (decimal y miles, como `NLS_NUMERIC_CHARACTERS`), `cur='B/. '` (símbolo de `L`/`U`, por defecto `$`), `iso=PAB` (código de `C`, por defecto `USD`). Las comillas permiten espacios.
+  - Nunca rellena con espacios a la izquierda; `FM` además quita los ceros finales de los `9` decimales, como en Oracle.
+  - En plantillas: `{SALDO|ora:FML999G990D00;nls=,.;cur='B/. '}`.
+- En Excel la celda sigue siendo número con el formato equivalente; los separadores de miles y decimales los pone la configuración regional del equipo (Excel no permite fijarlos en el formato).
 - Una columna `NUMBER` sin `fmt` usa `money` si alguna fila tiene decimales; si todas son enteras, se muestra tal cual.
 - Cualquier otro valor de `fmt` deja el valor sin cambios (en Excel, número con formato *General*).
 

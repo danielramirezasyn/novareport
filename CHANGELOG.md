@@ -1,5 +1,12 @@
 # Cambios
 
+## 1.21.0
+- Máscaras con **coma decimal**: `B/. #.##0,00` → `B/. 1.234,50` (también `0,00`). `0,000` y `#,##0` siguen siendo miles, como en Excel.
+- Formato **`ora:`**: modelo de `TO_CHAR` de Oracle aplicado en la visualización, sin cambiar la consulta. Ej.: `ora:FML999G999G990D00;nls=,.;cur='B/. '` → `B/. 1.234,50`. Elementos `9 0 G D , . L U C $ PR MI S B FM`; opciones `nls` (decimal y miles), `cur` e `iso`.
+- Excel: la celda sigue siendo número con el formato equivalente; los separadores los pone la configuración regional del equipo.
+- Sin cambios para diseños existentes: los archivos de prueba de 1.19.0 salen idénticos byte a byte.
+- Designer 0.19.0: sugerencias de máscaras con coma decimal y de modelos `ora:` en el campo **Formato**.
+
 ## 1.20.0
 - Formato **`mask:`**: máscara numérica estilo Excel para símbolo de moneda, decimales, miles y negativos. Ej.: `mask:B/. #,##0.00;(B/. #,##0.00);"-"` (positivo;negativo;cero), `mask:#,##0.000 "USD"`, `mask:0.0%`, `mask:#,##0.0,, "M"`, `mask:000000`. Sirve en `fmt` de columnas, totales, ficha y formulario, y en plantillas `{COL|mask:…}`. El prefijo `mask:` es opcional (`B/. #,##0.00`).
 - PDF y Word aplican la máscara en el plugin; Excel recibe el mismo formato en `numFmt`, así la celda sigue siendo número y los totales (`SUMA`, `PROMEDIO`…) toman el formato de la columna.
