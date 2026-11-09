@@ -1,0 +1,958 @@
+{
+ "fileName": "reclamo_gastos_medicos_{DOC.POLIZA}",
+ "title": "Formulario de reclamos de gastos médicos",
+ "page": {
+  "size": "letter",
+  "orientation": "portrait",
+  "margin": 8,
+  "theme": {
+   "primary": "#1F6FAE",
+   "headText": "#FFFFFF",
+   "fontSize": 7
+  }
+ },
+ "form": {
+  "protect": true
+ },
+ "footer": {
+  "left": "Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá.",
+  "right": "Página {PAGE}/{PAGES}",
+  "size": 6.5
+ },
+ "sections": [
+  {
+   "type": "header",
+   "title": "FORMULARIO DE RECLAMOS DE GASTOS MÉDICOS",
+   "subtitle": "Favor completar este formulario en su totalidad en LETRA IMPRENTA.",
+   "size": 13
+  },
+  {
+   "type": "texto",
+   "size": 7,
+   "italic": true,
+   "paragraphGap": 0.5,
+   "text": [
+    "Asegúrese que todas las preguntas estén debidamente contestadas y firmar el documento al reverso.",
+    "En caso de estar incompleto o escrito ilegible no podrá ser procesado."
+   ]
+  },
+  {
+   "type": "grupo",
+   "title": "SECCIÓN A: PARA SER COMPLETADO POR EL ASEGURADO/PROVEEDOR",
+   "border": true,
+   "padding": 1.5,
+   "sections": [
+    {
+     "type": "formulario",
+     "source": "DOCS",
+     "columns": 8,
+     "size": 6.5,
+     "labelPosition": "top",
+     "labelSize": 5.3,
+     "fields": [
+      {
+       "label": "1. NOMBRE DE LA COMPAÑÍA DE SEGUROS",
+       "name": "ASEGURADORA",
+       "value": "{ASEGURADORA}",
+       "span": 4
+      },
+      {
+       "label": "2. NÚMERO DE PÓLIZA",
+       "name": "POLIZA",
+       "value": "{POLIZA}",
+       "span": 2
+      },
+      {
+       "label": "3. N° CERTIFICADO",
+       "name": "CERTIFICADO",
+       "value": "{CERTIFICADO}",
+       "span": 2
+      },
+      {
+       "label": "4. NOMBRE COMPLETO DEL ASEGURADO PRINCIPAL",
+       "name": "ASEGURADO",
+       "value": "{ASEGURADO}",
+       "span": "row"
+      },
+      {
+       "label": "5. E-MAIL PERSONAL",
+       "name": "EMAIL",
+       "value": "{EMAIL}",
+       "span": 5
+      },
+      {
+       "label": "6. CELULAR",
+       "name": "CELULAR",
+       "value": "{CELULAR}",
+       "span": 3
+      },
+      {
+       "label": "7. NOMBRE COMPLETO DEL PACIENTE QUE SE ATENDIÓ",
+       "name": "PACIENTE",
+       "value": "{PACIENTE}",
+       "span": 4
+      },
+      {
+       "label": "8. CÉDULA O PASAPORTE",
+       "name": "CEDULA",
+       "value": "{CEDULA}",
+       "span": 2
+      },
+      {
+       "label": "9. FECHA DE NACIMIENTO (DD/MM/AA)",
+       "name": "F_NAC",
+       "value": "{F_NAC}",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "label": "10. ¿SEGURO EN OTRA COMPAÑÍA?",
+       "name": "OTRO_SEGURO",
+       "input": "list",
+       "options": [
+        "SÍ",
+        "NO"
+       ],
+       "span": 2
+      },
+      {
+       "label": "NOMBRE DE LA COMPAÑÍA",
+       "name": "OTRA_CIA",
+       "span": 3
+      },
+      {
+       "label": "NÚMERO DE PÓLIZA",
+       "name": "OTRA_POLIZA",
+       "span": 2
+      },
+      {
+       "label": "FECHA EFECTIVA",
+       "name": "OTRA_FECHA",
+       "maxLength": 8,
+       "span": 1
+      },
+      {
+       "label": "11. PAÍS DE ATENCIÓN",
+       "name": "PAIS",
+       "value": "{PAIS}",
+       "span": 2
+      },
+      {
+       "label": "12. LUGAR DE EMPLEO, COLEGIO O UNIVERSIDAD DEL PACIENTE",
+       "name": "EMPLEO",
+       "span": 4
+      },
+      {
+       "label": "OCUPACIÓN",
+       "name": "OCUPACION",
+       "span": 2
+      }
+     ],
+     "labelWidth": 8
+    }
+   ],
+   "gap": 1.5
+  },
+  {
+   "type": "grupo",
+   "title": "SECCIÓN B: PARA SER COMPLETADO POR EL ASEGURADO",
+   "border": true,
+   "padding": 1.5,
+   "sections": [
+    {
+     "type": "formulario",
+     "columns": 8,
+     "size": 6.5,
+     "labelPosition": "top",
+     "labelSize": 5.3,
+     "fields": [
+      {
+       "label": "13. RECLAMO A CAUSA DE UNA ENFERMEDAD: DESCRIBA",
+       "name": "ENFERMEDAD",
+       "input": "multiline",
+       "lines": 2,
+       "span": 6
+      },
+      {
+       "label": "FECHA DE LOS PRIMEROS SÍNTOMAS",
+       "name": "F_SINTOMAS",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "label": "14. RECLAMO A CAUSA DE ACCIDENTE: DESCRIBA",
+       "name": "ACCIDENTE",
+       "input": "multiline",
+       "lines": 2,
+       "span": "row"
+      },
+      {
+       "label": "¿DÓNDE OCURRIÓ?",
+       "name": "ACC_DONDE",
+       "span": 4
+      },
+      {
+       "label": "¿CUÁNDO OCURRIÓ? (DD/MM/AA)",
+       "name": "ACC_FECHA",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "label": "HORA",
+       "name": "ACC_HORA",
+       "maxLength": 5,
+       "span": 2
+      },
+      {
+       "label": "¿CÓMO OCURRIÓ?",
+       "name": "ACC_COMO",
+       "input": "multiline",
+       "lines": 2,
+       "span": "row"
+      },
+      {
+       "label": "¿EL RESPONSABLE ES UN TERCERO?",
+       "name": "TERCERO",
+       "input": "list",
+       "options": [
+        "SÍ",
+        "NO"
+       ],
+       "span": 2
+      },
+      {
+       "label": "NOMBRE DEL RESPONSABLE",
+       "name": "RESPONSABLE",
+       "span": 3
+      },
+      {
+       "label": "ASEGURADORA",
+       "name": "RESP_CIA",
+       "span": 2
+      },
+      {
+       "label": "CELULAR",
+       "name": "RESP_CEL",
+       "span": 1
+      },
+      {
+       "label": "¿SUFRIÓ LESIONES?",
+       "name": "LESIONADO",
+       "input": "list",
+       "options": [
+        "SÍ",
+        "NO"
+       ],
+       "span": 2
+      },
+      {
+       "label": "¿CUÁLES SON LAS LESIONES QUE SUFRIÓ?",
+       "name": "LESIONES",
+       "span": 6
+      },
+      {
+       "label": "15. ¿TRATAMIENTO O INCAPACIDAD ANTERIOR?",
+       "name": "PREVIO",
+       "input": "list",
+       "options": [
+        "SÍ",
+        "NO"
+       ],
+       "span": 2
+      },
+      {
+       "label": "FECHA DE INGRESO (DD/MM/AA)",
+       "name": "F_INGRESO",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "label": "CLÍNICA U HOSPITAL",
+       "name": "CLINICA",
+       "span": 4
+      },
+      {
+       "label": "NOMBRE DE LOS MÉDICOS CONSULTADOS",
+       "name": "MEDICOS",
+       "span": "row"
+      },
+      {
+       "label": "TOTALMENTE INCAPACITADO",
+       "name": "INC_TOTAL",
+       "input": "checkbox",
+       "span": 2
+      },
+      {
+       "label": "PARCIALMENTE INCAPACITADO",
+       "name": "INC_PARCIAL",
+       "input": "checkbox",
+       "span": 2
+      },
+      {
+       "label": "DESDE (DD/MM/AA)",
+       "name": "INC_DESDE",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "label": "HASTA (DD/MM/AA)",
+       "name": "INC_HASTA",
+       "maxLength": 8,
+       "span": 2
+      }
+     ],
+     "labelWidth": 8
+    },
+    {
+     "type": "columnas",
+     "widths": [
+      42,
+      58
+     ],
+     "colGap": 4,
+     "cols": [
+      [
+       {
+        "type": "texto",
+        "size": 7.5,
+        "bold": true,
+        "text": [
+         "16. DETALLE DE CARGOS"
+        ]
+       },
+       {
+        "type": "formulario",
+        "columns": 1,
+        "size": 6.5,
+        "labelWidth": 30,
+        "fields": [
+         {
+          "label": "Consulta B/.",
+          "name": "C_CONSULTA"
+         },
+         {
+          "label": "Medicinas B/.",
+          "name": "C_MEDICINAS"
+         },
+         {
+          "label": "Laboratorios B/.",
+          "name": "C_LABORATORIOS"
+         },
+         {
+          "label": "Rx/Ultrasonido B/.",
+          "name": "C_RX"
+         },
+         {
+          "label": "Terapias B/.",
+          "name": "C_TERAPIAS"
+         },
+         {
+          "label": "Otros B/.",
+          "name": "C_OTROS"
+         },
+         {
+          "label": "Total de Cargos B/.",
+          "name": "C_TOTAL",
+          "labelBold": true
+         }
+        ]
+       }
+      ],
+      [
+       {
+        "type": "grupo",
+        "title": "GUÍA DEL ASEGURADO PARA LA PRESENTACIÓN DE SU RECLAMO",
+        "fill": "#EEF5FB",
+        "padding": 1.5,
+        "titleSize": 7,
+        "sections": [
+         {
+          "type": "texto",
+          "size": 6.5,
+          "paragraphGap": 0.6,
+          "text": [
+           "- Revise que el formulario de reclamos esté completado en todas sus partes.",
+           "- Asegúrese de que su firma aparezca en este Formulario de Reclamos de Gastos Médicos.",
+           "- Verifique que los códigos de diagnósticos hayan sido indicados en este formulario.",
+           "- Las facturas o recibos deben ser originales, con la descripción detallada de cada medicamento o procedimiento, y cumplir los requisitos fiscales de la DGI.",
+           "- Adjunte cualquier otra información requerida por la Aseguradora.",
+           "- **Compra de medicamentos:** no es necesario que el médico complete el formulario si la orden está expedida por el médico tratante con fecha, firma y sello, detalla los diagnósticos y se adjunta la orden original (o copia sellada por la farmacia)."
+          ]
+         }
+        ],
+        "gap": 1.5
+       }
+      ]
+     ],
+     "gap": 1
+    }
+   ],
+   "gap": 1.5
+  },
+  {
+   "type": "salto"
+  },
+  {
+   "type": "grupo",
+   "title": "SECCIÓN C: PARA SER COMPLETADO POR EL MÉDICO PROVEEDOR",
+   "border": true,
+   "padding": 1.5,
+   "sections": [
+    {
+     "type": "formulario",
+     "columns": 8,
+     "size": 6.5,
+     "labelPosition": "top",
+     "labelSize": 5.3,
+     "fields": [
+      {
+       "label": "1. DIAGNÓSTICO PRINCIPAL (a)",
+       "name": "DIAG_A",
+       "span": 5
+      },
+      {
+       "label": "CÓDIGO (ICD)",
+       "name": "ICD_A",
+       "span": 1
+      },
+      {
+       "label": "INICIO DE LA CONDICIÓN",
+       "name": "F_DIAG_A",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "label": "DIAGNÓSTICO SECUNDARIO (b)",
+       "name": "DIAG_B",
+       "span": 5
+      },
+      {
+       "label": "CÓDIGO (ICD)",
+       "name": "ICD_B",
+       "span": 1
+      },
+      {
+       "label": "INICIO DE LA CONDICIÓN",
+       "name": "F_DIAG_B",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "label": "OTRO DIAGNÓSTICO (c)",
+       "name": "DIAG_C",
+       "span": 5
+      },
+      {
+       "label": "CÓDIGO (ICD)",
+       "name": "ICD_C",
+       "span": 1
+      },
+      {
+       "label": "INICIO DE LA CONDICIÓN",
+       "name": "F_DIAG_C",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "label": "2. ¿RECLAMO POR EMBARAZO?",
+       "name": "EMBARAZO",
+       "input": "list",
+       "options": [
+        "SÍ",
+        "NO"
+       ],
+       "span": 2
+      },
+      {
+       "label": "FECHA DE INICIO DE EMBARAZO (FUM)",
+       "name": "FUM",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "empty": true,
+       "span": 4
+      },
+      {
+       "label": "3. ¿TRATAMIENTO ANTERIOR POR ESTAS U OTRAS CONDICIONES RELACIONADAS?",
+       "name": "PREVIO_MED",
+       "input": "list",
+       "options": [
+        "SÍ",
+        "NO"
+       ],
+       "span": 2
+      },
+      {
+       "label": "EN CASO AFIRMATIVO, DETALLE",
+       "name": "PREVIO_DET",
+       "span": 4
+      },
+      {
+       "label": "¿CUÁNDO? (DD/MM/AA)",
+       "name": "PREVIO_FECHA",
+       "maxLength": 8,
+       "span": 2
+      },
+      {
+       "label": "4. CUADRO CLÍNICO, HALLAZGOS FÍSICOS, COMPLICACIÓN, EXÁMENES DE LABORATORIO Y RAYOS X, ASÍ COMO MEDICAMENTOS QUE APOYEN EL DIAGNÓSTICO",
+       "name": "CUADRO",
+       "input": "multiline",
+       "lines": 3,
+       "span": "row"
+      }
+     ],
+     "labelWidth": 8
+    }
+   ],
+   "gap": 1.5
+  },
+  {
+   "type": "grupo",
+   "title": "INFORME DE SERVICIOS O PROCEDIMIENTOS BRINDADOS",
+   "border": true,
+   "padding": 1.5,
+   "sections": [
+    {
+     "type": "formulario",
+     "columns": 8,
+     "size": 6.5,
+     "labelPosition": "top",
+     "labelSize": 5.3,
+     "labelAlign": "center",
+     "fields": [
+      {
+       "label": "DESDE (DD/MM/AA)",
+       "name": "S1_DESDE",
+       "maxLength": 8
+      },
+      {
+       "label": "HASTA (DD/MM/AA)",
+       "name": "S1_HASTA",
+       "maxLength": 8
+      },
+      {
+       "label": "DÍAS O UNIDADES",
+       "name": "S1_DIAS"
+      },
+      {
+       "label": "CÓDIGOS CPT/HCPS",
+       "name": "S1_CPT"
+      },
+      {
+       "label": "DESCRIPCIÓN",
+       "name": "S1_DESC"
+      },
+      {
+       "label": "TOTAL CARGOS",
+       "name": "S1_TOTAL"
+      },
+      {
+       "label": "MONTO PAGADO ASEGURADO",
+       "name": "S1_PAGADO"
+      },
+      {
+       "label": "SALDO A PAGAR",
+       "name": "S1_SALDO"
+      },
+      {
+       "label": "",
+       "name": "S2_DESDE",
+       "maxLength": 8,
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S2_HASTA",
+       "maxLength": 8,
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S2_DIAS",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S2_CPT",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S2_DESC",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S2_TOTAL",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S2_PAGADO",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S2_SALDO",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S3_DESDE",
+       "maxLength": 8,
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S3_HASTA",
+       "maxLength": 8,
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S3_DIAS",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S3_CPT",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S3_DESC",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S3_TOTAL",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S3_PAGADO",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S3_SALDO",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S4_DESDE",
+       "maxLength": 8,
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S4_HASTA",
+       "maxLength": 8,
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S4_DIAS",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S4_CPT",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S4_DESC",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S4_TOTAL",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S4_PAGADO",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "S4_SALDO",
+       "labelPosition": "none"
+      },
+      {
+       "empty": true,
+       "span": 4
+      },
+      {
+       "label": "TOTALES",
+       "name": "T_LBL",
+       "readOnly": true,
+       "labelPosition": "none",
+       "value": "TOTALES"
+      },
+      {
+       "label": "",
+       "name": "T_TOTAL",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "T_PAGADO",
+       "labelPosition": "none"
+      },
+      {
+       "label": "",
+       "name": "T_SALDO",
+       "labelPosition": "none"
+      }
+     ],
+     "labelWidth": 8
+    },
+    {
+     "type": "formulario",
+     "columns": 8,
+     "size": 6.5,
+     "labelPosition": "top",
+     "labelSize": 5.3,
+     "fields": [
+      {
+       "label": "¿TIENE PRE-AUTORIZACIÓN?",
+       "name": "PREAUT",
+       "input": "list",
+       "options": [
+        "SÍ",
+        "NO"
+       ],
+       "span": 2
+      },
+      {
+       "label": "NÚMERO",
+       "name": "PREAUT_NUM",
+       "span": 2
+      },
+      {
+       "label": "NOMBRE DEL MÉDICO O PROVEEDOR",
+       "name": "PROVEEDOR",
+       "span": 4
+      },
+      {
+       "label": "¿ES PROVEEDOR DE RED?",
+       "name": "RED",
+       "input": "list",
+       "options": [
+        "SÍ",
+        "NO"
+       ],
+       "span": 2
+      },
+      {
+       "label": "TELÉFONO (si no es de red)",
+       "name": "PROV_TEL",
+       "span": 2
+      },
+      {
+       "label": "E-MAIL (si no es de red)",
+       "name": "PROV_EMAIL",
+       "span": 4
+      }
+     ],
+     "labelWidth": 8
+    }
+   ],
+   "gap": 1.5
+  },
+  {
+   "type": "texto",
+   "size": 7,
+   "bold": true,
+   "text": [
+    "Certifico que las respuestas anteriores son correctas y verdaderas a mi mejor conocimiento y que corresponden a los servicios que he prestado a este paciente."
+   ]
+  },
+  {
+   "type": "columnas",
+   "widths": [
+    55,
+    45
+   ],
+   "colGap": 4,
+   "cols": [
+    [
+     {
+      "type": "grupo",
+      "title": "Médico Tratante",
+      "border": true,
+      "padding": 1.5,
+      "titleFill": "#D6E6F3",
+      "titleColor": "#1B4F72",
+      "titleSize": 7.5,
+      "sections": [
+       {
+        "type": "formulario",
+        "columns": 1,
+        "size": 6.5,
+        "labelWidth": 18,
+        "fields": [
+         {
+          "label": "Cédula",
+          "name": "MED_CEDULA"
+         },
+         {
+          "label": "D.V.",
+          "name": "MED_DV",
+          "maxLength": 4
+         },
+         {
+          "label": "Fecha",
+          "name": "MED_FECHA",
+          "maxLength": 8
+         }
+        ]
+       },
+       {
+        "type": "espacio",
+        "height": 2
+       },
+       {
+        "type": "linea",
+        "width": 50,
+        "thickness": 0.2
+       },
+       {
+        "type": "texto",
+        "size": 6.5,
+        "text": [
+         "Firma                                                       **Sello** (con nombre y registro)"
+        ]
+       }
+      ],
+      "gap": 1.5
+     }
+    ],
+    [
+     {
+      "type": "grupo",
+      "title": "Si es pago directo a proveedor, emitir a nombre de:",
+      "border": true,
+      "padding": 1.5,
+      "titleFill": "#D6E6F3",
+      "titleColor": "#1B4F72",
+      "titleSize": 7.5,
+      "sections": [
+       {
+        "type": "formulario",
+        "columns": 1,
+        "size": 6.5,
+        "labelPosition": "none",
+        "fields": [
+         {
+          "label": "Emitir a nombre de",
+          "name": "PAGO_NOMBRE",
+          "input": "multiline",
+          "lines": 2
+         }
+        ]
+       },
+       {
+        "type": "espacio",
+        "height": 2
+       },
+       {
+        "type": "linea",
+        "width": 50,
+        "align": "center",
+        "thickness": 0.2
+       },
+       {
+        "type": "texto",
+        "size": 6.5,
+        "align": "center",
+        "text": [
+         "**Sello** (con RUC o cédula y D.V.)"
+        ]
+       }
+      ],
+      "gap": 1.5
+     }
+    ]
+   ],
+   "gap": 1
+  },
+  {
+   "type": "grupo",
+   "title": "CONSENTIMIENTO IRREFUTABLE Y EXPRESO PARA TRATAMIENTO DE DATOS PERSONALES",
+   "border": true,
+   "padding": 1.5,
+   "sections": [
+    {
+     "type": "texto",
+     "size": 5.2,
+     "align": "justify",
+     "paragraphGap": 0.4,
+     "text": [
+      "En pleno uso de mis facultades legales y mentales, sin mediar coacción alguna, otorgo irrefutablemente consentimiento expreso a la aseguradora (punto 1) emisora de la póliza (punto 2), así como cualquier otra compañía o aseguradora que mantenga obligación contractual con el asegurado (puntos 10 y 14) para que solicite, recabe, obtenga, almacene, transfiera, analice y trate todos los datos personales que considere necesario, relacionados con el reclamo presentado en este formulario, de modo que pueda cumplir sus obligaciones legales y contractuales, procedente del contrato de seguros y de la necesidad de evaluar las causas, circunstancias, costos, y pronóstico de la condición médica que da origen o sustenta mi reclamación de indemnización para estar en capacidad de decidir la indemnización que corresponda, de conformidad con el contrato de seguro vigente, así como la Ley de Seguros (Ley No. 12 de 3 de abril de 2012) y las normas aplicables.",
+      "Este consentimiento expreso ampara datos personales, incluyendo datos sensibles, datos biométricos, datos genéticos y datos relativos a la salud en diversas formas, incluyendo, sin limitar: informes, copias fotostáticas, documentos electrónicos, imágenes, diagnósticos, declaraciones, expedientes clínicos o registros profesionales, de los cuales soy titular a modo personal, o como tutor de un menor o persona incapaz identificado en este documento, y autoriza a solicitar, recabar y obtener de toda fuente que tenga en su poder dichos datos relacionados con este reclamo, incluyendo de mi persona, así como también de: 1. Médicos o profesionales de la salud. 2. Hospitales, clínicas, centros de diagnósticos, laboratorios, farmacias, y cualquier otra facilidad médica o relacionada, ya sea privada o gubernamental. 3. La Caja de Seguro Social, Ministerio de Salud y sus dependencias. 4. Aseguradoras o tenedores de pólizas de seguros de grupo, empleador, buró de información médica u otra organización, institución o persona que tenga cualquier información de mi salud. 5. El Corredor de Seguros, Agente de Ventas u otro tipo de mediador comercial del contrato de seguros.",
+      "Entiendo que este consentimiento otorga la facultad para tratar los datos personales amparados, con sus socios comerciales y reaseguradores que tengan relación con el contrato de seguros contra el cual presento este reclamo, e incluye expresamente el tratamiento transfronterizo de los datos personales amparados.",
+      "Manifiesto que este consentimiento expreso e irrefutable es otorgado con pleno conocimiento de los derechos que protegen la privacidad de los datos personales de los que soy titular, según se expresan en la Ley No. 68 del 20 de noviembre de 2003; la Ley No. 40 del 14 de agosto de 2018; la Ley No. 81 del 26 de marzo de 2019; el Decreto Ejecutivo No. 285 del 28 de mayo de 2021; así como también las obligaciones y derechos contenidos en el contrato de seguros que mantengo, Ley No. 12 del 3 de abril de 2012 y el Código de Comercio de Panamá, el cual estará vigente desde la fecha de su otorgamiento, e incluso después de mi muerte, mientras no haya sido revocado expresamente, en ejercicio del derecho legal que me concede la ley.",
+      "Declaro que toda la información contenida en este formulario es verdadera, completa y proporciona la información de modo confiable y actualizada sobre todos los aspectos sobre los cuales se ha hecho preguntar."
+     ],
+     "lineHeight": 1.2
+    },
+    {
+     "type": "formulario",
+     "columns": 8,
+     "size": 6.5,
+     "labelPosition": "top",
+     "labelSize": 5.3,
+     "fields": [
+      {
+       "label": "NOMBRE DEL PACIENTE O PERSONA AUTORIZADA A FIRMAR",
+       "name": "FIRMANTE",
+       "value": "{DOC.PACIENTE}",
+       "span": 4
+      },
+      {
+       "label": "CÉDULA / PASAPORTE",
+       "name": "FIRMANTE_CED",
+       "value": "{DOC.CEDULA}",
+       "span": 2
+      },
+      {
+       "label": "FECHA (DD/MM/AA)",
+       "name": "FIRMA_FECHA",
+       "maxLength": 8,
+       "span": 2
+      }
+     ],
+     "labelWidth": 8
+    },
+    {
+     "type": "espacio",
+     "height": 2
+    },
+    {
+     "type": "linea",
+     "width": 80,
+     "thickness": 0.2
+    },
+    {
+     "type": "texto",
+     "size": 6.5,
+     "text": [
+      "**FIRMA DEL PACIENTE O PERSONA AUTORIZADA A FIRMAR**"
+     ]
+    }
+   ],
+   "gap": 1.5
+  },
+  {
+   "type": "alerta",
+   "source": "DOCS",
+   "color": "#D6E6F3",
+   "size": 7,
+   "text": "Póliza en suspensión de cobertura y/o cancelada a la fecha de atención médica, causará la Declinación del Reclamo."
+  }
+ ]
+}

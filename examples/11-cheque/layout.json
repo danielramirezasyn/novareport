@@ -1,0 +1,63 @@
+{
+  "fileName": "cheques_{TODAY}",
+  "page": { "size": [210, 99], "orientation": "landscape", "margin": 5, "theme": { "primary": "#1F6FAE" } },
+  "watermark": { "text": "{IMPORTE_TXT}", "angle": 0, "color": "#2E86C1", "opacity": 0.13 },
+  "batch": { "mergeName": "cheques_{TODAY}" },
+  "sections": [
+    { "type": "linea", "x1": 0, "y1": 49.5, "x2": 210, "y2": 49.5, "thickness": 99, "color": "#E3F1FB" },
+    { "type": "linea", "x1": 4, "y1": 4, "x2": 206, "y2": 4, "thickness": 0.3, "color": "#7F8C8D" },
+    { "type": "linea", "x1": 4, "y1": 95, "x2": 206, "y2": 95, "thickness": 0.3, "color": "#7F8C8D" },
+    { "type": "linea", "x1": 4, "y1": 4, "x2": 4, "y2": 95, "thickness": 0.3, "color": "#7F8C8D" },
+    { "type": "linea", "x1": 206, "y1": 4, "x2": 206, "y2": 95, "thickness": 0.3, "color": "#7F8C8D" },
+
+    { "type": "texto", "x": 8, "y": 8, "size": 7, "text": ["Logotipo de la entidad y oficina pagadora"] },
+    { "type": "texto", "x": 8, "y": 14, "size": 7, "text": ["Nombre y dirección de la entidad y oficina pagadora"] },
+
+    { "type": "texto", "x": 120, "y": 6.5, "width": 82, "size": 7, "bold": true, "align": "center", "text": ["CÓDIGO CUENTA CLIENTE (C.C.C.)"] },
+    { "type": "linea", "x1": 120, "y1": 10, "x2": 202, "y2": 10, "thickness": 0.2 },
+    { "type": "texto", "x": 120, "y": 11, "width": 16, "size": 5.5, "align": "center", "text": ["ENTIDAD"] },
+    { "type": "texto", "x": 138, "y": 11, "width": 16, "size": 5.5, "align": "center", "text": ["OFICINA"] },
+    { "type": "texto", "x": 156, "y": 11, "width": 10, "size": 5.5, "align": "center", "text": ["D.C."] },
+    { "type": "texto", "x": 168, "y": 11, "width": 34, "size": 5.5, "align": "center", "text": ["NÚMERO DE CUENTA"] },
+    { "type": "texto", "x": 120, "y": 14.5, "width": 16, "size": 8.5, "bold": true, "align": "center", "text": ["{ENTIDAD}"] },
+    { "type": "texto", "x": 138, "y": 14.5, "width": 16, "size": 8.5, "bold": true, "align": "center", "text": ["{OFICINA}"] },
+    { "type": "texto", "x": 156, "y": 14.5, "width": 10, "size": 8.5, "bold": true, "align": "center", "text": ["{DC}"] },
+    { "type": "texto", "x": 168, "y": 14.5, "width": 34, "size": 8.5, "bold": true, "align": "center", "text": ["{CUENTA}"] },
+    { "type": "linea", "x1": 120, "y1": 19.5, "x2": 202, "y2": 19.5, "thickness": 0.2 },
+
+    { "type": "linea", "x1": 124, "y1": 28.2, "x2": 202, "y2": 28.2, "thickness": 9, "color": "#000000" },
+    { "type": "texto", "x": 126, "y": 24.4, "font": "courier", "size": 15, "bold": true, "color": "#FFFFFF", "text": ["{IMPORTE_PROT}"] },
+    { "type": "texto", "x": 126, "y": 29.8, "font": "courier", "size": 7.5, "color": "#FFFFFF", "text": ["{SEGURIDAD}"] },
+
+    { "type": "texto", "x": 8, "y": 36, "size": 7, "text": ["Páguese por este cheque a"] },
+    { "type": "texto", "x": 42, "y": 35.3, "size": 10, "bold": true, "text": ["{BENEFICIARIO}"] },
+    { "type": "linea", "x1": 41, "y1": 40, "x2": 202, "y2": 40, "thickness": 0.2 },
+    { "type": "texto", "x": 8, "y": 43, "size": 7, "text": ["Euros"] },
+    { "type": "linea", "x1": 22, "y1": 44.8, "x2": 150, "y2": 44.8, "thickness": 4.6, "color": "#000000" },
+    { "type": "texto", "x": 24, "y": 43, "width": 125, "size": 8, "bold": true, "color": "#FFFFFF", "text": ["{IMPORTE|letras:EURO/EUROS}"] },
+
+    { "type": "texto", "x": 70, "y": 52.5, "width": 38, "size": 9, "bold": true, "align": "right", "text": ["{LUGAR},"] },
+    { "type": "texto", "x": 112, "y": 53, "size": 7, "text": ["A"] },
+    { "type": "texto", "x": 118, "y": 52.5, "width": 12, "size": 9, "bold": true, "align": "center", "text": ["{DIA}"] },
+    { "type": "texto", "x": 132, "y": 53, "size": 7, "text": ["DE"] },
+    { "type": "texto", "x": 138, "y": 52.5, "width": 34, "size": 9, "bold": true, "align": "center", "text": ["{MES}"] },
+    { "type": "texto", "x": 174, "y": 53, "size": 7, "text": ["DE"] },
+    { "type": "texto", "x": 181, "y": 52.5, "width": 20, "size": 9, "bold": true, "align": "center", "text": ["{ANIO}"] },
+    { "type": "linea", "x1": 60, "y1": 57, "x2": 202, "y2": 57, "thickness": 0.2 },
+    { "type": "texto", "x": 62, "y": 57.6, "size": 5.5, "text": ["(La fecha debe consignarse en letras)"] },
+
+    { "type": "texto", "x": 8, "y": 66, "size": 7, "text": ["SERIE"] },
+    { "type": "texto", "x": 18, "y": 65.5, "width": 14, "size": 8.5, "bold": true, "align": "center", "text": ["{SERIE}"] },
+    { "type": "texto", "x": 35, "y": 66, "size": 7, "text": ["N.º"] },
+    { "type": "texto", "x": 41, "y": 65.5, "size": 8.5, "bold": true, "text": ["{NUMERO}   {NUMERO_DC}"] },
+    { "type": "texto", "x": 70, "y": 65.5, "size": 8.5, "bold": true, "text": ["{COD}   {COD_DC}"] },
+    { "type": "linea", "x1": 17, "y1": 69.5, "x2": 90, "y2": 69.5, "thickness": 0.2 },
+
+    { "type": "texto", "x": 128, "y": 61, "width": 74, "size": 7, "align": "center", "text": ["{TITULAR}"] },
+    { "type": "imagen", "field": "FIRMA", "x": 140, "y": 64, "height": 13 },
+    { "type": "linea", "x1": 132, "y1": 78, "x2": 200, "y2": 78, "thickness": 0.2 },
+    { "type": "texto", "x": 132, "y": 78.6, "width": 68, "size": 5.5, "align": "center", "text": ["Firma(s) autorizada(s)"] },
+
+    { "type": "texto", "x": 14, "y": 84, "font": "courier", "size": 11, "text": ["{MICR}"] }
+  ]
+}

@@ -1,5 +1,16 @@
 # Cambios
 
+## 1.22.0
+- **Hipervínculos** en PDF, Excel y Word:
+  - Texto enriquecido: `[a=https://…]texto[/a]` (la URL admite plantillas: `[a=mailto:{CORREO}]{CORREO}[/a]`).
+  - `href` en columnas de tabla (por fila, también en celdas con imagen o código), en campos de `ficha` y en `imagen`.
+- Se aceptan `http(s)`, `mailto`, `tel` y `ftp`; `www.` pasa a `https://`; las rutas relativas se completan con la URL de la página (para páginas de APEX, `apex_page.get_url` en la consulta). Otros esquemas (`javascript:`…) se descartan.
+- Estilo: subrayado y color `page.theme.link` (`#0563C1`); un color propio (`[c=]`, `color` de la columna, reglas) tiene prioridad.
+- Excel admite un vínculo por celda: un párrafo con varios toma el primero; una celda numérica con `href` pasa a texto con el formato de la columna.
+- Sin cambios para diseños existentes: los archivos de prueba de 1.21.0 salen idénticos.
+- Ejemplo nuevo: `12-hipervinculos` (URL de páginas de APEX con `apex_page.get_url`).
+- Designer 0.20.0: propiedad **Hipervínculo (URL)** en columnas, contenido de celda (imagen y código), campos de ficha e imagen; ícono de vínculo en el lienzo y vista previa de `[a=…]` en el texto.
+
 ## 1.21.0
 - Máscaras con **coma decimal**: `B/. #.##0,00` → `B/. 1.234,50` (también `0,00`). `0,000` y `#,##0` siguen siendo miles, como en Excel.
 - Formato **`ora:`**: modelo de `TO_CHAR` de Oracle aplicado en la visualización, sin cambiar la consulta. Ej.: `ora:FML999G999G990D00;nls=,.;cur='B/. '` → `B/. 1.234,50`. Elementos `9 0 G D , . L U C $ PR MI S B FM`; opciones `nls` (decimal y miles), `cur` e `iso`.

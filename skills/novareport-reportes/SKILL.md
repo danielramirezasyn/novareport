@@ -104,6 +104,7 @@ select count(*) clientes, sum(saldo) saldo_total from clientes
 | Listado, detalle, plan de pagos | `tabla` (`totals`, `breakBy`, `groups`, `rowStyle`) |
 | Mensaje condicional destacado | `alerta` |
 | Carta, párrafos, cláusulas | `texto` (`**negrita**`, `*cursiva*`, `[c=#hex]…[/c]`) |
+| Vínculos (web, correo, detalle por fila) | `[a=URL]…[/a]` en `texto`; `href` en columnas de `tabla`, campos de `ficha` e `imagen` |
 | Logo, foto | `imagen` |
 | Barras, líneas, circular | `grafico` |
 | QR, código de barras | `codigo` |

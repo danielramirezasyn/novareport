@@ -36,7 +36,7 @@ The detailed reference ([docs/API.md](docs/API.md), [docs/DISENO.md](docs/DISENO
 |---|---|
 | **One layout, three formats** | The same JSON produces PDF, Excel (`.xlsx` with colors, `=SUM()` totals, autofilter, multiple sheets) and Word (editable `.docx`). |
 | **Batches** | One file per document inside a **ZIP**, with an optional **summary** document; or every document **merged into a single file**. |
-| **Declarative layout** | Header band, key/value card, tables with totals (sum, average, min, max, count), control breaks with subtotals, grouped headers and conditional styles, alerts, rich text (bold, italic, underline, strike-through, colors, 3 fonts), images (URL or **BLOB**), charts, **QR** and **Code 128**, watermark, lines and **absolutely positioned** elements. |
+| **Declarative layout** | Header band, key/value card, tables with totals (sum, average, min, max, count), control breaks with subtotals, grouped headers and conditional styles, alerts, rich text (bold, italic, underline, strike-through, colors, 3 fonts, **hyperlinks**), images (URL or **BLOB**), charts, **QR** and **Code 128**, watermark, lines and **absolutely positioned** elements. |
 | **Tiles and grids** | Summary **tiles** (label + highlighted value), key/value cards in a **grid** with colored labels, and tables with borders and left- or right-aligned headers, identical in all three formats. |
 | **Fillable forms** | Text, list and checkbox fields the recipient fills in: AcroForm in PDF, content controls in Word (*forms only* protection with a password) and validated cells in Excel (protected sheet). |
 | **Columns** | **Side-by-side** cells (logo and details, customer and totals, signatures) that look the same in PDF and Word, and become column blocks in Excel. |

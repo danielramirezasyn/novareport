@@ -56,6 +56,7 @@ Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) es
 | `page.theme.muted` | `#787878` | Texto del pie de página. |
 | `page.theme.fontSize` | `7` | Tamaño base de tablas (PDF y Word). |
 | `page.theme.group` | `#DCE6F0` | Fila de encabezado de grupo en tablas con `breakBy`. |
+| `page.theme.link` | `#0563C1` | Color de los [hipervínculos](#hipervínculos). |
 | `title` | — | Propiedad *Título* del PDF y del Word. Acepta plantillas. |
 | `fileName` | `reporte` | Nombre de cada documento, sin extensión. Acepta plantillas (`{DOC.X}`, `{TODAY}`). |
 | `emptyMessage` | `No hay datos para generar el reporte.` | Mensaje si `DOCS` no trae filas. |
@@ -274,6 +275,7 @@ Pares **etiqueta / valor** en N columnas, tomados de la primera fila de `source`
 | `fields[].bold` | `false` | Valor en negrita. |
 | `fields[].color` | `valueColor` | Color del valor, fijo (`"#1B7A3D"`) o según una columna: `{ "by", "values", "default" }`, como en [`alerta`](#alerta). |
 | `fields[].fill` | — | Fondo de la celda del valor. |
+| `fields[].href` | — | [Hipervínculo](#hipervínculos) del valor (plantilla): `"https://sitio/cliente/{ID}"`, `"mailto:{CORREO}"`. |
 
 ```json
 { "label": "Saldo",  "value": "{SALDO}", "fmt": "money", "align": "right", "bold": true, "color": "#1B7A3D" }
@@ -387,6 +389,7 @@ Se combina con `span` y huecos. En una misma fila pueden convivir campos con la 
 | `when` | La columna solo aparece si se cumple la [condición](#condiciones), evaluada por documento (no por fila). Si oculta columnas, revise `groups`. |
 | `valign` | Alineación vertical de las celdas de esta columna (`top`, `middle`, `bottom`). Tiene prioridad sobre el `valign` de la tabla. |
 | `cell` | Contenido de la celda por fila: código QR o de barras, imagen, gráfico o texto. Ver [bloques en celdas](#bloques-en-celdas). |
+| `href` | [Hipervínculo](#hipervínculos) de la celda, por fila: `"https://sitio/ver?id={ID}"`. También sirve dentro de `cell` (imagen o código). En Excel la celda pasa a texto con el formato de la columna. |
 
 #### Bloques en celdas
 
@@ -482,9 +485,10 @@ Uno o varios párrafos con texto enriquecido.
 | `++texto++` | subrayado |
 | `[f=times]…[/f]` | tipo de letra: `helvetica`, `times`, `courier` |
 | `[c=#AA1E1E]…[/c]` | color |
+| `[a=https://…]…[/a]` | [hipervínculo](#hipervínculos); la URL admite plantillas: `[a=mailto:{CORREO}]{CORREO}[/a]` |
 | `\*` | asterisco literal (en JSON: `"\\*"`) |
 
-Las marcas se pueden anidar: `[c=#19783C]***{SAL|money}***[/c]`.
+Las marcas se pueden anidar: `[c=#19783C]***{SAL|money}***[/c]`, `[a={WEB}]**sitio**[/a]`.
 
 ### `imagen`
 
@@ -504,6 +508,7 @@ PNG o JPG desde una URL o desde una columna BLOB.
 | `align` | `left` | `left`, `center`, `right` (PDF y Word). |
 | `gap` | `3` | Espacio después, en mm. |
 | `x`, `y` | — | Posición fija (solo PDF). |
+| `href` | — | [Hipervínculo](#hipervínculos) de la imagen (plantilla). |
 
 Si la columna viene vacía, la imagen se omite. En Excel la imagen se ancla en la columna A de la fila actual.
 
@@ -687,6 +692,22 @@ Contenedor (1.19): agrupa cualquier sección dentro de un marco con título, fon
 - Los campos de un `formulario` dentro de un grupo repetido llevan `_1`, `_2`… por repetición.
 - **PDF:** marco dibujado alrededor del contenido. **Word:** tabla de una celda (título en su propia fila). **Excel:** banda de título, secciones y borde exterior del bloque.
 
+### Hipervínculos
+
+Desde 1.22 el texto, las celdas de tabla, los valores de ficha y las imágenes pueden llevar un vínculo:
+
+```json
+{ "type": "texto", "text": ["Consulte el [a=https://www.novacode-labs.com/tasas]tarifario vigente[/a] o escriba a [a=mailto:{CORREO}]{CORREO}[/a]."] }
+{ "type": "tabla", "source": "MOVS", "columns": [ { "col": "NRO", "href": "{URL_DETALLE}" }, "CONCEPTO", "MONTO" ] }
+{ "type": "ficha", "fields": [ { "label": "Sitio", "value": "{WEB}", "href": "{WEB}" } ] }
+{ "type": "imagen", "url": "#APP_FILES#logo.png", "width": 30, "href": "https://www.novacode-labs.com" }
+```
+
+- La URL es una plantilla: `{COL}` toma el valor de la fila (tabla) o de la primera fila de la fuente (texto, ficha, imagen).
+- Se aceptan `http(s)://`, `mailto:`, `tel:` y `ftp://`. `www.…` pasa a `https://www.…`. Una ruta relativa (`/ords/…`, `detalle?id=…`) se completa con la URL de la página que genera el reporte; para enlazar páginas de APEX arme la URL en la consulta con `apex_page.get_url` (con URLs amigables, un `f?p=` relativo no apunta a la raíz de ORDS). Cualquier otro esquema (`javascript:`, `data:`…) se descarta y el texto queda sin vínculo. Las sustituciones `&ITEM.` de APEX no se resuelven en el navegador: arme la URL en la consulta (`apex_page.get_url(p_page => 20, p_items => 'P20_NRO', p_values => nro) url_detalle`) o use `{ITEM.P1_X}`.
+- Estilo: subrayado y en `page.theme.link` (`#0563C1` por defecto). Un `[c=…]` dentro del vínculo, el `color` de la columna o el color de una regla (`cellStyle`, `rowStyle`, `fields[].color`) tienen prioridad.
+- **PDF:** zona cliqueable sobre el texto (o sobre toda la celda en tablas y fichas). **Word:** `w:hyperlink`. **Excel:** vínculo de celda; Excel admite uno por celda, así que un párrafo con varios vínculos toma el primero. Una celda numérica con `href` se exporta como texto con el formato de la columna.
+
 ### `espacio` y `salto`
 
 ```json
@@ -720,6 +741,7 @@ Contenedor (1.19): agrupa cualquier sección dentro de un marco con título, fon
 | `columnas` dentro de `columnas` o `grupo` | ✓ | ✓ | ✓ |
 | `alerta` | ✓ | ✓ | ✓ |
 | `texto` enriquecido | ✓ | ✓ | ✓ |
+| Hipervínculos: `[a=…]` en `texto`, `href` en columnas, campos de `ficha` e `imagen` | ✓ | ✓ uno por celda | ✓ |
 | `texto` / `imagen` / `grafico` / `codigo` con `x`, `y` | ✓ | — | se ignora la posición |
 | `imagen` | ✓ | ✓ | ✓ |
 | `grafico` | ✓ | ✓ imagen | ✓ |

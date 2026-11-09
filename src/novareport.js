@@ -1,5 +1,5 @@
 /*!
- * novaReport 1.21.0 - Reportes PDF / Excel / Word para Oracle APEX
+ * novaReport 1.22.0 - Reportes PDF / Excel / Word para Oracle APEX
  * https://github.com/danielramirezasyn/novareport - Licencia MIT
  * NovaCode - plugin de Acción Dinámica COM.NOVACODE.NOVAREPORT
  *
@@ -10,7 +10,7 @@
 window.novaReport = (function () {
   'use strict';
 
-  var VERSION = '1.21.0';
+  var VERSION = '1.22.0';
 
   /* ------------------------------------------------------------------ librerías */
   var LIBS = {
@@ -56,7 +56,7 @@ window.novaReport = (function () {
 
   /* ------------------------------------------------------------------ utilidades */
   var THEME = { primary: '#1F4E79', headText: '#FFFFFF', zebra: '#F5F7FA', totals: '#E6ECF2',
-                text: '#000000', muted: '#787878', fontSize: 7, group: '#DCE6F0' };
+                text: '#000000', muted: '#787878', fontSize: 7, group: '#DCE6F0', link: '#0563C1' };
 
   function isNum(v) { return typeof v === 'number' && !isNaN(v); }
   function hexRgb(h) {
@@ -364,17 +364,52 @@ window.novaReport = (function () {
 
   /* Texto enriquecido:
      **negrita**  *cursiva*  ***ambas***  ~~tachado~~  ++subrayado++
-     [f=times]...[/f] (helvetica | times | courier)   [c=#AA1E1E]...[/c] color   \* escapa */
+     [f=times]...[/f] (helvetica | times | courier)   [c=#AA1E1E]...[/c] color   \* escapa
+     1.22: [a=https://...]texto[/a] hipervínculo (subrayado y en el color de vínculo, salvo [c=] dentro del vínculo) */
   var FONTS = { helvetica: ['helvetica', 'Arial'], arial: ['helvetica', 'Arial'], times: ['times', 'Times New Roman'],
                 serif: ['times', 'Times New Roman'], courier: ['courier', 'Courier New'], mono: ['courier', 'Courier New'] };
+  /* 1.22: URL de un hipervínculo. Acepta http(s), mailto, tel y ftp; "www." pasa a https://; una ruta relativa
+     (f?p=..., /ords/...) se completa con la URL de la página. Cualquier otro esquema (javascript:, data:...) se descarta */
+  function linkUrl(u) {
+    u = String(u === null || u === undefined ? '' : u).trim();
+    if (!u) { return null; }
+    if (/^www\./i.test(u)) { u = 'https://' + u; }
+    if (/^(https?:|mailto:|tel:|ftp:)/i.test(u)) { return u.replace(/ /g, '%20'); }
+    if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(u)) { return null; }
+    try { if (window.location && /^https?:/.test(window.location.href)) { return new URL(u, window.location.href).href; } } catch (e) { /* sin base */ }
+    return null;
+  }
+  /* href de una columna, campo o imagen: plantilla con {COL} de la fila */
+  function hrefOf(o, ctx, row) { return o && o.href ? linkUrl(tpl(o.href, ctx, row)) : null; }
+  /* PDF: vínculo sobre una celda de AutoTable y subrayado del texto (mismo cálculo de posición que AutoTable) */
+  function pdfCellLink(doc, cell, url, under) {
+    if (!url) { return; }
+    doc.link(cell.x, cell.y, cell.width, cell.height, { url: url });
+    var lines = Array.isArray(cell.text) ? cell.text : [cell.text];
+    if (under === false || !lines.join('')) { return; }
+    var fs = doc.internal.getFontSize() / doc.internal.scaleFactor, lh = fs * (doc.getLineHeightFactor ? doc.getLineHeightFactor() : 1.15);
+    var p = cell.getTextPos(), va = cell.styles.valign, ha = cell.styles.halign, y = p.y + fs * (2 - 1.15);
+    if (va === 'middle') { y -= lines.length / 2 * lh; } else if (va === 'bottom') { y -= lines.length * lh; }
+    var tc = cell.styles.textColor;
+    if (Array.isArray(tc)) { doc.setDrawColor(tc[0], tc[1], tc[2]); } else if (typeof tc === 'string' && /^#/.test(tc)) { var tr = hexRgb(tc); doc.setDrawColor(tr[0], tr[1], tr[2]); } else { doc.setDrawColor(tc || 0); }
+    doc.setLineWidth(fs * 0.035);
+    lines.forEach(function (ln, i) {
+      var w = doc.getStringUnitWidth(String(ln)) * fs, x = ha === 'right' ? p.x - w : (ha === 'center' ? p.x - w / 2 : p.x), yy = y + i * lh + fs * 0.17;
+      if (w > 0) { doc.line(x, yy, x + w, yy); }
+    });
+  }
   function fontKey(f) { f = String(f || 'helvetica').toLowerCase(); return FONTS[f] ? f : 'helvetica'; }
   function richRuns(s, base) {
     base = base || {};
-    var out = [], st = { b: false, i: false, u: false, s: false }, fonts = [base.font || 'helvetica'], colors = [base.color || null];
+    var out = [], st = { b: false, i: false, u: false, s: false }, fonts = [base.font || 'helvetica'], colors = [base.color || null], links = [];
     var buf = '', k = 0, m;
     s = String(s === null || s === undefined ? '' : s);
     function push() {
-      if (buf) { out.push({ t: buf, b: st.b, i: st.i, u: st.u, s: st.s, f: fontKey(fonts[fonts.length - 1]), c: colors[colors.length - 1] }); buf = ''; }
+      if (!buf) { return; }
+      var lk = links[links.length - 1], c = colors[colors.length - 1];
+      if (lk && lk.url && colors.length <= lk.cd) { c = base.link || THEME.link; }
+      out.push({ t: buf, b: st.b, i: st.i, u: st.u || !!(lk && lk.url), s: st.s, f: fontKey(fonts[fonts.length - 1]), c: c, h: lk ? lk.url : null });
+      buf = '';
     }
     while (k < s.length) {
       var rest = s.substr(k);
@@ -383,6 +418,8 @@ window.novaReport = (function () {
       if (rest.substr(0, 4) === '[/f]') { push(); if (fonts.length > 1) { fonts.pop(); } k += 4; continue; }
       if ((m = /^\[c=(#[0-9A-Fa-f]{3,6})\]/.exec(rest))) { push(); colors.push(m[1]); k += m[0].length; continue; }
       if (rest.substr(0, 4) === '[/c]') { push(); if (colors.length > 1) { colors.pop(); } k += 4; continue; }
+      if ((m = /^\[a=([^\]\s]*)\]/.exec(rest))) { push(); links.push({ url: linkUrl(m[1]), cd: colors.length }); k += m[0].length; continue; }
+      if (rest.substr(0, 4) === '[/a]') { push(); links.pop(); k += 4; continue; }
       if (rest.substr(0, 3) === '***') { push(); st.b = !st.b; st.i = !st.i; k += 3; continue; }
       if (rest.substr(0, 2) === '**') { push(); st.b = !st.b; k += 2; continue; }
       if (rest.substr(0, 2) === '~~') { push(); st.s = !st.s; k += 2; continue; }
@@ -420,7 +457,7 @@ window.novaReport = (function () {
                valign: /^(top|middle|bottom)$/.test(String(c.valign || '').toLowerCase()) ? String(c.valign).toLowerCase() : null,
                fmt: f, map: c.map, bold: !!c.bold, width: c.width,
                align: c.align || (ci ? 'center' : null) || (textFmt(f) ? 'left' : (t === 'NUMBER' || f === 'money' || f === 'int' || f === 'num' || isMask(f) ? 'right' : (t === 'DATE' || f === 'date' ? 'center' : 'left'))),
-               cellStyle: c.cellStyle, color: c.color, headAlign: c.headAlign,
+               cellStyle: c.cellStyle, color: c.color, headAlign: c.headAlign, href: c.href || (c.cell && c.cell.href) || null,
                isNum: !ci && !textFmt(f) && ((t === 'NUMBER' && !c.map && !c.value) || f === 'money' || f === 'int' || /^num/.test(f || '') || isMask(f)) };
     });
   }
@@ -1382,9 +1419,9 @@ window.novaReport = (function () {
           paragraphsOf(sec, ctx).forEach(function (para) {
             /* palabras con estilo */
             var words = [];
-            richRuns(para, { font: baseFont, color: sec.color }).forEach(function (r) {
+            richRuns(para, { font: baseFont, color: sec.color, link: th.link }).forEach(function (r) {
               r.t.split(/( +)/).forEach(function (w) {
-                if (w !== '') { words.push({ t: w, fam: FONTS[r.f][0], f: fontOf(r), sp: /^ +$/.test(w), u: r.u, s: r.s, c: r.c ? hexRgb(r.c) : col }); }
+                if (w !== '') { words.push({ t: w, fam: FONTS[r.f][0], f: fontOf(r), sp: /^ +$/.test(w), u: r.u, s: r.s, c: r.c ? hexRgb(r.c) : col, h: r.h }); }
               });
             });
             /* Ancho sin kerning (jsPDF dibuja sin kerning, pero getTextWidth lo aplica): suma por carácter */
@@ -1423,6 +1460,7 @@ window.novaReport = (function () {
                 if (!w.sp) { doc.setFont(w.fam, w.f); doc.text(w.t, x, base); }
                 if (w.u) { doc.line(x, base + fs * 0.06, x + ww, base + fs * 0.06); }
                 if (w.s) { doc.line(x, base - fs * 0.11, x + ww, base - fs * 0.11); }
+                if (w.h) { doc.link(x, y, ww, lh, { url: w.h }); }
                 x += ww;
               });
               y += lh;
@@ -1448,7 +1486,8 @@ window.novaReport = (function () {
           var im = imgOf(sec, ctx);
           if (!im) { return; }
           var szI = imgSize(sec, im), fmtI = im.ext === 'jpg' ? 'JPEG' : 'PNG';
-          place(sec, szI.w, szI.h, function (ix, iy) { doc.addImage(im.data, fmtI, ix, iy, szI.w, szI.h); });
+          var ihr = hrefOf(sec, ctx, sec.source ? rowsOf(sec, ctx)[0] : null);
+          place(sec, szI.w, szI.h, function (ix, iy) { doc.addImage(im.data, fmtI, ix, iy, szI.w, szI.h); if (ihr) { doc.link(ix, iy, szI.w, szI.h, { url: ihr }); } });
           return;
         }
         if (t === 'grafico') {
@@ -1561,28 +1600,30 @@ window.novaReport = (function () {
           return;
         }
         if (t === 'ficha') {
-          var fr = rowsOf(sec, ctx)[0] || {}, n = sec.columns || 3, body = [], cs = {};
+          var fr = rowsOf(sec, ctx)[0] || {}, n = sec.columns || 3, body = [], cs = {}, hasLk = false;
           slotRows((sec.fields || []).filter(function (f) { return !f.when || cond(f.when, ctx, fr); }), n).forEach(function (row) {
             var cur = [];
             row.forEach(function (sl) {
               var f = sl.f;
               if (sl.empty) { cur.push({ content: '', colSpan: sl.span * 2, styles: { lineWidth: 0, fillColor: false } }); return; }
-              var lb0 = labelOf(f, sec), fst0 = fieldStyle(f, ctx, fr), fv0 = fieldText(f, ctx, fr);
+              var lb0 = labelOf(f, sec), fst0 = fieldStyle(f, ctx, fr), fv0 = fieldText(f, ctx, fr), fh0 = hrefOf(f, ctx, fr);
               if (lb0.pos !== 'left') {    /* 1.16: la casilla es una sola celda (etiqueta arriba o sin etiqueta) */
                 var stx = { fontStyle: fst0 && fst0.bold ? 'bold' : 'normal', fillColor: fst0 && fst0.fill ? hexRgb(fst0.fill) : false,
                             textColor: hexRgb((fst0 && fst0.color) || sec.valueColor || '#000000'), halign: (fst0 && fst0.align) || 'left' };
-                var vcl = { content: fv0, colSpan: sl.span * 2, styles: stx };
+                if (fh0) { if (!(fst0 && fst0.color)) { stx.textColor = hexRgb(th.link); } hasLk = true; }
+                var vcl = { content: fv0, colSpan: sl.span * 2, styles: stx, _nrHref: fh0 };
                 if (lb0.pos === 'top') { vcl._nrLab = { text: labelText(tpl(f.label, ctx, fr), lb0), lb: lb0, align: lb0.align || stx.halign }; }
                 cur.push(vcl);
                 return;
               }
-              if (fst0 || sl.span > 1) {
+              if (fst0 || sl.span > 1 || fh0) {
                 var fsx = {};
+                if (fh0) { fsx.textColor = hexRgb(th.link); hasLk = true; }
                 if (fst0 && fst0.align) { fsx.halign = fst0.align; }
                 if (fst0 && fst0.bold) { fsx.fontStyle = 'bold'; }
                 if (fst0 && fst0.color) { fsx.textColor = hexRgb(fst0.color); }
                 if (fst0 && fst0.fill) { fsx.fillColor = hexRgb(fst0.fill); }
-                fv0 = { content: fv0, styles: fsx };
+                fv0 = { content: fv0, styles: fsx, _nrHref: fh0 };
                 if (sl.span > 1) { fv0.colSpan = sl.span * 2 - 1; }
               }
               var lt0 = tpl(f.label, ctx, fr);
@@ -1615,6 +1656,13 @@ window.novaReport = (function () {
             fto.didDrawCell = function (d) {
               var L = d.section === 'body' && d.cell.raw && d.cell.raw._nrLab;
               if (L) { pdfLabel(doc, d.cell, L, fsz0, fpd); }
+            };
+          }
+          if (hasLk) {
+            var fdd = fto.didDrawCell;
+            fto.didDrawCell = function (d) {
+              if (d.section === 'body' && d.cell.raw && d.cell.raw._nrHref) { pdfCellLink(doc, d.cell, d.cell.raw._nrHref); }
+              if (fdd) { fdd(d); }
             };
           }
           doc.autoTable(fto);
@@ -1733,20 +1781,21 @@ window.novaReport = (function () {
             if (c.bold) { colSt[i].fontStyle = 'bold'; }
             if (c.width) { colSt[i].cellWidth = c.width; }
           });
-          var items = tableItems(sec, rows), sset = subCols(sec), GR = hexRgb(th.group), bodyIt = [], bodyIm = [], imW = {};
+          var items = tableItems(sec, rows), sset = subCols(sec), GR = hexRgb(th.group), bodyIt = [], bodyIm = [], bodyLk = [], imW = {};
           var body = rows.length ? [] : [[{ content: tpl(sec.emptyText, ctx), colSpan: cols.length, styles: { halign: 'left', fontStyle: 'italic' } }]];
           if (rows.length) {
             items.forEach(function (it) {   /* bodyIt: ítem de cada fila del cuerpo (un subtotal puede ocupar 2 filas) */
-              if (it.k === 'head') { body.push([{ content: breakText(sec, it, ctx), colSpan: cols.length, styles: { halign: 'left', fontStyle: 'bold', fillColor: GR } }]); bodyIt.push(it); bodyIm.push(null); return; }
-              if (it.k === 'sub') { pdfAgg(aggRow(cols, sset, it.rows, breakText(sec, it, ctx)), cols.length).forEach(function (rw) { body.push(rw); bodyIt.push(it); bodyIm.push(null); }); return; }
-              var rim = null;
+              if (it.k === 'head') { body.push([{ content: breakText(sec, it, ctx), colSpan: cols.length, styles: { halign: 'left', fontStyle: 'bold', fillColor: GR } }]); bodyIt.push(it); bodyIm.push(null); bodyLk.push(null); return; }
+              if (it.k === 'sub') { pdfAgg(aggRow(cols, sset, it.rows, breakText(sec, it, ctx)), cols.length).forEach(function (rw) { body.push(rw); bodyIt.push(it); bodyIm.push(null); bodyLk.push(null); }); return; }
+              var rim = null, rlk = null;
+              cols.forEach(function (c, ci) { var u = hrefOf(c, ctx, it.r); if (u) { (rlk = rlk || {})[ci] = u; } });
               body.push(cols.map(function (c, ci) {
                 if (!c.cell) { return cellText(c, it.r, ctx); }
                 var cim = cellImg(c, it.r, ctx, th);
                 if (cim) { (rim = rim || {})[ci] = cim; imW[ci] = Math.max(imW[ci] || 0, cim.w); }
                 return '';
               }));
-              bodyIt.push(it); bodyIm.push(rim);
+              bodyIt.push(it); bodyIm.push(rim); bodyLk.push(rlk);
             });
             Object.keys(imW).forEach(function (ci) { colSt[ci].cellWidth = Math.max(cols[ci].width || 0, imW[ci] + 3); });
           }
@@ -1773,6 +1822,7 @@ window.novaReport = (function () {
               if (it.k === 'sub') { h.cell.styles.fillColor = TT; h.cell.styles.fontStyle = 'bold'; return; }
               var r = it.r, c = cols[h.column.index];
               if (sec.breakBy) { h.cell.styles.fillColor = it.i % 2 === 1 && sec.zebra !== false ? Z : [255, 255, 255]; }
+              if (bodyLk[h.row.index] && bodyLk[h.row.index][h.column.index] && !c.color) { h.cell.styles.textColor = hexRgb(th.link); }
               var rs = styleOf(sec.rowStyle, ctx, r);
               if (rs) {
                 if (rs.fill) { h.cell.styles.fillColor = hexRgb(rs.fill); }
@@ -1792,6 +1842,7 @@ window.novaReport = (function () {
             didDrawCell: function (h) {
               if (h.section !== 'body') { return; }
               var cim = bodyIm[h.row.index] && bodyIm[h.row.index][h.column.index];
+              pdfCellLink(doc, h.cell, bodyLk[h.row.index] && bodyLk[h.row.index][h.column.index], !cols[h.column.index].cell);
               if (!cim) { return; }
               var al = cols[h.column.index].align, x = al === 'left' ? h.cell.x + 1 : (al === 'right' ? h.cell.x + h.cell.width - cim.w - 1 : h.cell.x + (h.cell.width - cim.w) / 2);
               var cva = cols[h.column.index].valign || tva;
@@ -1945,9 +1996,9 @@ window.novaReport = (function () {
         function merge(r1, c1, r2, c2) { ws.mergeCells(r1, c1 + C0, r2, c2 + C0); }
         function rowH(rr, h) { var R = ws.getRow(rr); R.height = Math.max(R.height || 0, h); }
         /* Imagen en la fila actual; avanza las filas que ocupa (20 px por fila) */
-        function putImg(im, wmm, hmm, keepNext) {
+        function putImg(im, wmm, hmm, keepNext, url) {
           var id = wb.addImage({ base64: im.data, extension: im.ext === 'jpg' ? 'jpeg' : 'png' });
-          ws.addImage(id, { tl: { col: C0, row: r - 1 }, ext: { width: wmm * 3.78, height: hmm * 3.78 } });
+          ws.addImage(id, { tl: { col: C0, row: r - 1 }, ext: { width: wmm * 3.78, height: hmm * 3.78 }, hyperlinks: url ? { hyperlink: url, tooltip: url } : undefined });
           r += Math.ceil(hmm * 3.78 / 20) + (keepNext ? 0 : 1);
         }
         function band(text, f, font, height) {
@@ -2016,9 +2067,13 @@ window.novaReport = (function () {
             paragraphsOf(sec, ctx).forEach(function (para) {
               merge(r, 1, r, maxC);
               var cx = cellAt(r, 1);
-              cx.value = { richText: richRuns(para, { font: sec.font || (layout.page && layout.page.font), color: sec.color }).map(function (x) {
+              var xr = richRuns(para, { font: sec.font || (layout.page && layout.page.font), color: sec.color, link: th.link });
+              cx.value = { richText: xr.map(function (x) {
                 return { text: x.t, font: { bold: !!(x.b || sec.bold), italic: !!(x.i || sec.italic), underline: x.u || undefined, strike: x.s || undefined,
                                             name: FONTS[x.f][1], color: x.c ? { argb: argb(x.c) } : undefined, size: sec.size || 10 } }; }) };
+              /* Excel admite un vínculo por celda: el párrafo toma el primero */
+              var xh = xr.filter(function (x) { return x.h; })[0];
+              if (xh) { cx.value = { text: cx.value, hyperlink: xh.h }; }
               cx.alignment = { wrapText: true, vertical: 'top', horizontal: sec.align === 'justify' ? 'justify' : (sec.align || 'left') };
               rowH(r, Math.max(15, Math.ceil(para.length / (inCols ? Math.max(16, maxC * 9) : 140)) * 15));
               r++;
@@ -2027,7 +2082,7 @@ window.novaReport = (function () {
             r++;
           } else if (t === 'imagen') {
             var imx = imgOf(sec, ctx);
-            if (imx) { var szx = imgSize(sec, imx); putImg(imx, szx.w, szx.h); }
+            if (imx) { var szx = imgSize(sec, imx); putImg(imx, szx.w, szx.h, false, hrefOf(sec, ctx, sec.source ? rowsOf(sec, ctx)[0] : null)); }
           } else if (t === 'grafico') {
             var gx = chartImg(sec, ctx, th);
             if (gx) { putImg(gx, gx.wmm, gx.hmm); }
@@ -2080,6 +2135,8 @@ window.novaReport = (function () {
               if (isNum(raw) && !textFmt(f.fmt)) { vc.value = raw; if (f.fmt === 'money') { vc.numFmt = '#,##0.00'; } else if (isMask(f.fmt)) { vc.numFmt = maskXl(f.fmt); } vc.alignment = { horizontal: 'left' }; }
               else if (f.fmt === 'date' && parseDate(raw)) { vc.value = parseDate(raw); vc.numFmt = 'dd/mm/yyyy'; vc.alignment = { horizontal: 'left' }; }
               else { vc.value = fieldText(f, ctx, fr); }
+              var fhx = hrefOf(f, ctx, fr);
+              if (fhx) { vc.value = { text: String(fieldText(f, ctx, fr)), hyperlink: fhx }; vc.font = { underline: true, color: { argb: argb(th.link) } }; }
               if (sec.grid) { vc.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }; }
               var fsy = fieldStyle(f, ctx, fr);
               if (fsy) {
@@ -2251,7 +2308,9 @@ window.novaReport = (function () {
                   if (ri % 2 === 1 && sec.zebra !== false) { cell.fill = fill(th.zebra); }
                   if (cim) {
                     var xid = wb.addImage({ base64: cim.im.data, extension: cim.im.ext === 'jpg' ? 'jpeg' : 'png' });
-                    ws.addImage(xid, { tl: { col: wc - 1 + 0.08, row: r - 1 + 0.08 }, ext: { width: cim.w * 3.78, height: cim.h * 3.78 } });
+                    var xiu = hrefOf(c, ctx, row);
+                    ws.addImage(xid, { tl: { col: wc - 1 + 0.08, row: r - 1 + 0.08 }, ext: { width: cim.w * 3.78, height: cim.h * 3.78 },
+                                       hyperlinks: xiu ? { hyperlink: xiu, tooltip: xiu } : undefined });
                     rowH(r, cim.h * 2.835 + 4);
                     widths[wc] = Math.min(60, Math.max(widths[wc] || 8, Math.ceil(cim.w * 3.78 / 7) + 2));
                   }
@@ -2272,6 +2331,11 @@ window.novaReport = (function () {
                 if (c.bold || (st && st.bold)) { font.bold = true; }
                 if ((st && st.color) || c.color) { font.color = { argb: argb((st && st.color) || c.color) }; }
                 if (font.bold || font.color) { cell.font = font; }
+                var xu = hrefOf(c, ctx, row);
+                if (xu && raw !== null && raw !== undefined && raw !== '') {   /* con vínculo la celda pasa a texto con el formato de la columna */
+                  cell.value = { text: String(cellText(c, row, ctx)), hyperlink: xu };
+                  cell.font = { bold: font.bold, underline: true, color: font.color || { argb: argb(th.link) } };
+                }
                 setW(i + 1, c.isNum ? fmt(raw, c.fmt) : raw);
               });
               r++;
@@ -2395,12 +2459,18 @@ window.novaReport = (function () {
 
     function run(text, o) {
       o = o || {};
-      return new D.TextRun({ text: String(text === null || text === undefined ? '' : text), bold: !!o.bold, italics: !!o.italic,
+      return new D.TextRun({ text: String(text === null || text === undefined ? '' : text), bold: !!o.bold, italics: !!o.italic, underline: o.underline ? {} : undefined,
                              size: o.size || szT, color: o.color ? hexNo(o.color) : undefined, font: o.font || 'Calibri' });
     }
+    /* 1.22: o.link pone el texto dentro de un w:hyperlink (subrayado; color de vínculo si no trae color propio) */
     function para(text, o) {
       o = o || {};
-      return new D.Paragraph({ children: [run(text, o)], spacing: { before: 0, after: 0 },
+      var ch = run(text, o);
+      if (o.link && String(text === null || text === undefined ? '' : text) !== '') {
+        var lo = copyOf(o); lo.underline = true; lo.color = o.linkColor || o.color || th.link;
+        ch = new D.ExternalHyperlink({ link: o.link, children: [run(text, lo)] });
+      }
+      return new D.Paragraph({ children: [ch], spacing: { before: 0, after: 0 },
         alignment: o.align === 'right' ? D.AlignmentType.RIGHT : (o.align === 'center' ? D.AlignmentType.CENTER : D.AlignmentType.LEFT) });
     }
     function cell(text, o) {
@@ -2418,12 +2488,13 @@ window.novaReport = (function () {
         alignment: align === 'right' ? D.AlignmentType.RIGHT : (align === 'center' ? D.AlignmentType.CENTER : D.AlignmentType.LEFT),
         shading: lb.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(lb.fill) } : undefined });
     }
-    function imgPara(im, wmm, hmm, sec, after) {
+    function imgPara(im, wmm, hmm, sec, after, url) {
+      var ir = new D.ImageRun({ type: im.ext === 'jpg' ? 'jpg' : 'png', data: im.buf,
+                                transformation: { width: Math.round(wmm * 3.78), height: Math.round(hmm * 3.78) } });
       return new D.Paragraph({
         alignment: sec.align === 'right' ? D.AlignmentType.RIGHT : (sec.align === 'center' ? D.AlignmentType.CENTER : D.AlignmentType.LEFT),
         spacing: { after: after !== undefined ? after : Math.round((sec.gap !== undefined ? sec.gap : 3) * 56.7) },
-        children: [new D.ImageRun({ type: im.ext === 'jpg' ? 'jpg' : 'png', data: im.buf,
-                                    transformation: { width: Math.round(wmm * 3.78), height: Math.round(hmm * 3.78) } })] });
+        children: [url ? new D.ExternalHyperlink({ link: url, children: [ir] }) : ir] });
     }
     var pgW = (land ? dims[1] : dims[0]) / 56.7, pgH = (land ? dims[0] : dims[1]) / 56.7;
     function wmHeader(ctx) {
@@ -2504,11 +2575,15 @@ window.novaReport = (function () {
               alignment: AL[sec.align] || D.AlignmentType.LEFT,
               indent: sec.indent ? { left: Math.round(sec.indent * 56.7) } : undefined,
               spacing: { after: sec.paragraphGap !== undefined ? Math.round(sec.paragraphGap * 56.7) : 120, line: Math.round(240 * (sec.lineHeight || 1.15)) },
-              children: richRuns(para, { font: sec.font || (layout.page && layout.page.font), color: sec.color }).map(function (x) {
-                return new D.TextRun({ text: x.t, bold: !!(x.b || sec.bold), italics: !!(x.i || sec.italic), size: (sec.size || 10) * 2,
+              children: richRuns(para, { font: sec.font || (layout.page && layout.page.font), color: sec.color, link: th.link }).reduce(function (acc, x) {
+                var tr = new D.TextRun({ text: x.t, bold: !!(x.b || sec.bold), italics: !!(x.i || sec.italic), size: (sec.size || 10) * 2,
                                        underline: x.u ? {} : undefined, strike: !!x.s,
                                        color: x.c ? hexNo(x.c) : undefined, font: FONTS[x.f][1] });
-              }) }));
+                if (!x.h) { acc.push(tr); acc.last = null; return acc; }
+                /* runs seguidos con el mismo vínculo van en un solo w:hyperlink */
+                if (acc.last && acc.last.h === x.h) { acc.last.runs.push(tr); return acc; }
+                acc.last = { h: x.h, runs: [tr] }; acc.push(acc.last); return acc;
+              }, []).map(function (e) { return e.runs ? new D.ExternalHyperlink({ link: e.h, children: e.runs }) : e; }) }));
           });
         } else if (t === 'espacio') {
           kids.push(new D.Paragraph({ children: [], spacing: { after: Math.round((sec.height || 6) * 56.7) } }));
@@ -2521,7 +2596,7 @@ window.novaReport = (function () {
           }
         } else if (t === 'imagen') {
           var imd = imgOf(sec, ctx);
-          if (imd) { var szd = imgSize(sec, imd); kids.push(imgPara(imd, szd.w, szd.h, sec)); }
+          if (imd) { var szd = imgSize(sec, imd); kids.push(imgPara(imd, szd.w, szd.h, sec, undefined, hrefOf(sec, ctx, sec.source ? rowsOf(sec, ctx)[0] : null))); }
         } else if (t === 'grafico') {
           var gd = chartImg(sec, ctx, th);
           if (gd) { kids.push(imgPara(gd, gd.wmm, gd.hmm, sec)); }
@@ -2554,7 +2629,8 @@ window.novaReport = (function () {
             if (lb.pos !== 'left') {    /* 1.16: una sola celda con la etiqueta arriba, o sin etiqueta */
               var fs1 = fieldStyle(f, ctx, fr), ch = [], pv1 = gd ? 60 : 30;
               if (lb.pos === 'top') { ch.push(labPara(labelText(lt, lb), lb, lb.align || (fs1 && fs1.align) || 'left')); }
-              ch.push(para(fieldText(f, ctx, fr), { size: 17, color: (fs1 && fs1.color) || sec.valueColor, bold: fs1 ? fs1.bold : undefined, align: fs1 ? fs1.align : undefined }));
+              ch.push(para(fieldText(f, ctx, fr), { size: 17, color: (fs1 && fs1.color) || sec.valueColor, bold: fs1 ? fs1.bold : undefined, align: fs1 ? fs1.align : undefined,
+                                                    link: hrefOf(f, ctx, fr), linkColor: (fs1 && fs1.color) || th.link }));
               cur.push(new D.TableCell({ children: ch, columnSpan: sl.span * 2, margins: { top: pv1, bottom: pv1, left: 60, right: 60 },
                                          verticalAlign: gd ? D.VerticalAlign.CENTER : undefined,
                                          shading: fs1 && fs1.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(fs1.fill) } : undefined }));
@@ -2565,6 +2641,7 @@ window.novaReport = (function () {
                      (function (fs) {
                        return cell(fieldText(f, ctx, fr), { size: 17, color: (fs && fs.color) || sec.valueColor, pad: pv, middle: gd,
                                                             bold: fs ? fs.bold : undefined, align: fs ? fs.align : undefined, fill: fs ? fs.fill : undefined,
+                                                            link: hrefOf(f, ctx, fr), linkColor: (fs && fs.color) || th.link,
                                                             span: sl.span > 1 ? sl.span * 2 - 1 : undefined });
                      })(fieldStyle(f, ctx, fr)));
            });
@@ -2712,10 +2789,12 @@ window.novaReport = (function () {
                   shading: cfill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(cfill) } : undefined,
                   children: [new D.Paragraph({ spacing: { before: 0, after: 0 },
                     alignment: c.align === 'right' ? D.AlignmentType.RIGHT : (c.align === 'left' ? D.AlignmentType.LEFT : D.AlignmentType.CENTER),
-                    children: cim ? [new D.ImageRun({ type: cim.im.ext === 'jpg' ? 'jpg' : 'png', data: cim.im.buf,
-                                                      transformation: { width: Math.round(cim.w * 3.78), height: Math.round(cim.h * 3.78) } })] : [] })] });
+                    children: cim ? [(function (ir, u) { return u ? new D.ExternalHyperlink({ link: u, children: [ir] }) : ir; })(
+                                      new D.ImageRun({ type: cim.im.ext === 'jpg' ? 'jpg' : 'png', data: cim.im.buf,
+                                                      transformation: { width: Math.round(cim.w * 3.78), height: Math.round(cim.h * 3.78) } }), hrefOf(c, ctx, row))] : [] })] });
               }
               return cell(cellText(c, row, ctx), { valign: c.valign || wva, align: c.align, bold: c.bold || st.bold, color: st.color || c.color,
+                                                   link: hrefOf(c, ctx, row), linkColor: st.color || c.color || th.link,
                                                    fill: st.fill || (ri % 2 === 1 && sec.zebra !== false ? th.zebra : null) });
             }) }));
           });

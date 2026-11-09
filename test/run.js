@@ -430,4 +430,43 @@ fs.mkdirSync(OUT, { recursive: true });
       console.log('OK  ', 'mascaras-120__' + format + '__' + r.name);
     }
   }
+  /* 1.22: hipervínculos en texto ([a=URL]...[/a]), columnas de tabla, campos de ficha e imágenes (href) */
+  {
+    const d = { DOCS: { cols: [N('CLIENTE'), N('WEB'), N('CORREO')], rows: [['Banco Demo', 'www.novacode-labs.com', 'info@novacode-labs.com']] },
+                MOVS: { cols: [U('ID'), N('CONCEPTO'), U('MONTO')], rows: [[101, 'Apertura', 1500], [102, 'Pago', 250.75], [103, 'Ajuste', -50.75]] } };
+    const layout = { fileName: 'vinculos-122', sections: [
+      { type: 'texto', source: 'DOCS', text: ['Visite [a=https://apex.oracle.com]Oracle APEX[/a] o escriba a [a=mailto:{CORREO}]**{CORREO}**[/a].',
+                                              'Color propio: [a={WEB}][c=#AA1E1E]sitio web[/c][/a]. Esquema inválido: [a=javascript:alert(1)]sin vínculo[/a].'] },
+      { type: 'ficha', source: 'DOCS', columns: 2, fields: [{ label: 'Cliente', value: '{CLIENTE}' }, { label: 'Web', value: '{WEB}', href: '{WEB}' },
+                                                            { label: 'Correo', value: '{CORREO}', href: 'mailto:{CORREO}', labelPosition: 'top' }] },
+      { type: 'tabla', source: 'MOVS', columns: [{ col: 'ID', href: 'https://example.com/mov?id={ID}' }, 'CONCEPTO',
+                                                  { col: 'MONTO', fmt: 'money', href: 'https://example.com/mov?id={ID}&m={MONTO}' }] },
+      { type: 'imagen', url: 'data:image/png;base64,' + logo.toString('base64'), width: 30, href: 'https://www.novacode-labs.com' }] };
+    const want = ['https://apex.oracle.com', 'mailto:info@novacode-labs.com', 'https://www.novacode-labs.com',
+                  'https://example.com/mov?id=101', 'https://example.com/mov?id=103&m=-50.75'];
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const r = await window.novaReport.build({ layout, format, output: 'file', zipType: 'nodebuffer' }, d);
+      const buf = Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data);
+      fs.writeFileSync(path.join(OUT, 'vinculos-122__' + format + '__' + r.name), buf);
+      let t;
+      if (format === 'pdf') { t = (buf.toString('latin1').match(/\/URI \([^)]*\)/g) || []).join(' '); }
+      else {
+        const z = await window.JSZip.loadAsync(buf), parts = [];
+        for (const n of Object.keys(z.files)) { if (/\.rels$/.test(n)) { parts.push(await z.file(n).async('string')); } }
+        t = parts.join(' ').replace(/&amp;/g, '&');
+      }
+      for (const w of want) { if (t.indexOf(w) < 0) { throw new Error(format + ' falta vínculo ' + w); } }
+      if (/javascript:/.test(t)) { throw new Error(format + ' aceptó javascript:'); }
+      if (format === 'xlsx') {
+        const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); let m = null;
+        wb.worksheets[0].eachRow(row => row.eachCell(c => { if (c.value && c.value.hyperlink === 'https://example.com/mov?id=101&m=1500') { m = c.value.text; } }));
+        if (m !== '1,500.00') { throw new Error('xlsx texto del vínculo ' + m); }
+      }
+      if (format === 'docx') {
+        const xml = await (await window.JSZip.loadAsync(buf)).file('word/document.xml').async('string');
+        if ((xml.match(/<w:hyperlink /g) || []).length < 10) { throw new Error('docx w:hyperlink'); }
+      }
+      console.log('OK  ', 'vinculos-122__' + format + '__' + r.name);
+    }
+  }
 })().catch(e => { console.error('FALLÓ', e); process.exit(1); });

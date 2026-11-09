@@ -46,6 +46,8 @@ Incluya:
 
 ## Publicar una versión
 
+Con `npm` disponible, `bash publicar.sh` hace todo lo de abajo en orden: pruebas, minificado, pruebas del minificado, export 26.1, variante 23.2, verificación de ambos exports y copia a `release/novareport`, `_publicar` y `release/novareport-x.y.z.zip`. Los pasos manuales son:
+
 1. Regenere el export (toma el PL/SQL, el minificado y la versión; sube `p_files_version` si cambió el JS):
 
    ```bash

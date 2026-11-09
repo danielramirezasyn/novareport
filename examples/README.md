@@ -22,6 +22,7 @@ Todos se pueden generar sin APEX con `cd test && npm install && npm test` (ver [
 | 07 | [Gráficos y códigos](#07--gráficos-y-códigos) | PDF / Excel / Word · Archivo | `grafico`, `codigo` (QR y Code 128), `breakBy` con subtotales, `watermark` |
 | 08 | [Factura con columnas](#08--factura-con-columnas) | PDF / Excel / Word · Archivo | `columnas`, `fmt: letras`, `when` en una sección |
 | 09 | [Cover Sheet de crédito](#09--cover-sheet-de-crédito) | PDF / Excel / Word · Archivo | `tarjetas`, `ficha` con `grid`, `tabla` con `headAlign` / `grid` / `totalsColor` |
+| 12 | [Hipervínculos](#12--hipervínculos) | PDF / Excel / Word · Archivo | `[a=URL]` en `texto`, `href` en columnas, ficha, imagen y QR de celda |
 
 ---
 
@@ -264,3 +265,20 @@ Portada de una presentación de crédito con las secciones de la versión 1.13.0
 
 **Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**.
 
+## 12 · Hipervínculos
+
+[`12-hipervinculos`](12-hipervinculos)
+
+Vínculos web, de correo, de teléfono y a páginas de la aplicación (versión 1.22.0). Usa solo `DUAL`; cargue `logo.png` en *Static Application Files*.
+
+| Qué | Cómo |
+|---|---|
+| Vínculos dentro de un párrafo | `[a=https://{WEB}]{WEB}[/a]`, `[a=mailto:{CORREO}]…[/a]`, `[a=tel:{TELEFONO}]…[/a]` |
+| Vínculo con formato o color propio | `[a={REPO}]**texto**[/a]`, `[a=…][c=#AA1E1E]…[/c][/a]` |
+| Página de APEX con sesión | URL armada en la consulta con `apex_page.get_url` y usada como `[a={URL_INICIO}]` o `"href": "{URL_DETALLE}"` |
+| Valor de ficha cliqueable | `"href": "mailto:{CORREO}"` en el campo |
+| Vínculo por fila en la tabla | `"href": "{SITIO}"` en la columna; la fila sin sitio queda sin vínculo |
+| QR cliqueable en la celda | `"cell": { "type": "codigo", …, "href": "{SITIO}" }` |
+| Logo cliqueable | `{ "type": "imagen", …, "href": "https://{WEB}" }` |
+
+**Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**.

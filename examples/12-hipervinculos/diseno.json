@@ -1,0 +1,29 @@
+{
+  "page": { "size": "letter", "orientation": "portrait", "theme": { "primary": "#1F4E79", "link": "#0563C1" } },
+  "fileName": "hipervinculos_{TODAY}",
+  "title": "Prueba de hipervínculos",
+  "footer": { "left": "novaReport · hipervínculos", "right": "Página {PAGE} de {PAGES}" },
+  "sections": [
+    { "type": "header", "title": "Hipervínculos", "subtitle": "PDF · Excel · Word", "right": "{NOW}" },
+    { "type": "imagen", "url": "#APP_FILES#logo.png", "width": 30, "href": "https://{WEB}" },
+    { "type": "texto", "source": "DOCS", "size": 10, "text": [
+      "Sitio web: [a=https://{WEB}]{WEB}[/a] · correo: [a=mailto:{CORREO}]{CORREO}[/a] · teléfono: [a=tel:{TELEFONO}]{TELEFONO}[/a].",
+      "Con formato: [a={REPO}]**código fuente en GitHub**[/a] y con color propio: [a=https://apex.oracle.com][c=#AA1E1E]Oracle APEX[/c][/a].",
+      "Página de la aplicación: [a={URL_INICIO}]ir al inicio[/a]."
+    ] },
+    { "type": "ficha", "source": "DOCS", "columns": 2, "grid": true, "fields": [
+      { "label": "Cliente", "value": "{CLIENTE}" },
+      { "label": "Sitio web", "value": "{WEB}", "href": "{WEB}" },
+      { "label": "Correo", "value": "{CORREO}", "href": "mailto:{CORREO}" },
+      { "label": "Teléfono", "value": "{TELEFONO}", "href": "tel:{TELEFONO}" }
+    ] },
+    { "type": "tabla", "source": "MOVS", "grid": true, "totals": ["MONTO"],
+      "columns": [
+        { "col": "NRO", "label": "N.º", "align": "center", "href": "{URL_DETALLE}" },
+        { "col": "FECHA", "label": "Fecha", "fmt": "date" },
+        { "col": "CONCEPTO", "label": "Concepto", "href": "{SITIO}" },
+        { "col": "MONTO", "label": "Monto", "fmt": "money", "cellStyle": [ { "when": "MONTO < 0", "color": "#AA1E1E", "bold": true } ] },
+        { "label": "QR", "width": 18, "cell": { "type": "codigo", "kind": "qr", "value": "{SITIO}", "size": 12, "href": "{SITIO}" } }
+      ] }
+  ]
+}
