@@ -1,7 +1,7 @@
 # novaReport — PDF, Excel and Word for Oracle APEX
 
-[![Version](https://img.shields.io/badge/version-1.21.0-1F4E79)](CHANGELOG.md)
-[![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requirements)
+[![Version](https://img.shields.io/badge/version-1.23.0-1F4E79)](CHANGELOG.md)
+[![APEX](https://img.shields.io/badge/Oracle%20APEX-23.2%2B-C74634)](#requirements)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > 🇵🇦 [Leer en español](README.md)
@@ -39,6 +39,9 @@ The detailed reference ([docs/API.md](docs/API.md), [docs/DISENO.md](docs/DISENO
 | **Declarative layout** | Header band, key/value card, tables with totals (sum, average, min, max, count), control breaks with subtotals, grouped headers and conditional styles, alerts, rich text (bold, italic, underline, strike-through, colors, 3 fonts, **hyperlinks**), images (URL or **BLOB**), charts, **QR** and **Code 128**, watermark, lines and **absolutely positioned** elements. |
 | **Tiles and grids** | Summary **tiles** (label + highlighted value), key/value cards in a **grid** with colored labels, and tables with borders and left- or right-aligned headers, identical in all three formats. |
 | **Fillable forms** | Text, list and checkbox fields the recipient fills in: AcroForm in PDF, content controls in Word (*forms only* protection with a password) and validated cells in Excel (protected sheet). |
+| **Oracle Reports-style pagination** | **Page header** with logo and per-document page numbers, **nested control breaks** with subtotals per level, **one group per page** and **carried-forward / brought-forward** rows at page breaks. |
+| **Crosstab** | **`pivot`** section: rows by one or more columns, one column per value (months, branches…) and row and column totals. |
+| **Protected PDF and attachments** | PDF **password** and permissions (per document) and **append PDFs** stored in a BLOB or in *Static Files* after each document. |
 | **Columns** | **Side-by-side** cells (logo and details, customer and totals, signatures) that look the same in PDF and Word, and become column blocks in Excel. |
 | **Logic in the layout** | Sections and columns shown **conditionally** (`when`), amounts **in words** (Spanish: `MIL DOSCIENTOS BALBOAS CON 50/100`) and value formats. |
 | **Save on the server** | Besides delivering it, uploads the generated file to a process in your application to **archive it, email it or log the run**. |
@@ -251,6 +254,10 @@ Events on `document`: `novareport-start`, `novareport-progress`, `novareport-end
 | [07 · Charts and codes](examples/07-graficos-codigos) | Bar and doughnut charts, a table with control breaks and subtotals, QR, Code 128 and a conditional watermark. |
 | [08 · Invoice with columns](examples/08-factura-columnas) | Customer and barcode side by side, amount in words next to the totals and two signatures on one line. |
 | [09 · Credit cover sheet](examples/09-cover-sheet) | Summary tiles, grid cards, bordered tables with left-aligned headers, colored totals and signatures. |
+| [10 · Medical expense claim](examples/10-reclamo-gastos-medicos) | Framed groups, form and per-row repetition. |
+| [11 · Check](examples/11-cheque) | Custom page size and amount in words. |
+| [12 · Hyperlinks](examples/12-hipervinculos) | Links in text, columns, cards and images; APEX page URLs. |
+| [13 · Account statement](examples/13-estado-cuenta) | Page header, crosstab, nested control breaks and carried-forward rows. |
 
 ## Testing without APEX
 
@@ -279,6 +286,8 @@ Requires Node 18 or later.
 | Dates | `DATE` columns travel as `DD/MM/YYYY`, without time. | `to_char(d, 'DD/MM/YYYY HH24:MI')` |
 | PDF forms | Protection is not encrypted and every field uses Helvetica at the size of the first form. | Use Word or Excel for a password-protected form. |
 | Word password | 1 to 15 ASCII characters (no accents). | |
+| PDF password | RC4 40-bit encryption (what jsPDF provides); cannot be combined with `append`. | For strong encryption, protect the file on the server (`save` process). |
+| Carried-forward rows | PDF only. | |
 | Size | 250,000 rows per request; batches and ZIPs are built in browser memory. | Split very large batches. |
 | UI texts | Waiting screen, progress and error messages are in Spanish. | |
 

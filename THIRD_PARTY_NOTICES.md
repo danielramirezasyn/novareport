@@ -14,6 +14,7 @@ novaReport no incluye estas librerías en el repositorio: las carga en tiempo de
 | [docxtemplater](https://github.com/open-xml-templating/docxtemplater) | 3.60.0 | Plantillas Word | MIT (núcleo) |
 | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) | 1.4.4 | Códigos QR (sección `codigo`) | MIT |
 | [Chart.js](https://github.com/chartjs/Chart.js) | 4.4.9 | Gráficos (sección `grafico`) | MIT |
+| [pdf-lib](https://github.com/Hopding/pdf-lib) | 1.17.1 | Anexar PDFs (`append`) | MIT |
 
 El código de barras Code 128 y el PNG de los códigos los genera novaReport, sin librerías.
 

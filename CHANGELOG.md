@@ -1,5 +1,18 @@
 # Cambios
 
+## 1.23.0
+- **Encabezado de página** (`pageHeader`): banda en cada página con imagen (`image.align`: izquierda, centro o derecha) y textos a la izquierda, centro y derecha, línea inferior y `firstPage: false` para omitirlo en la primera página. PDF (el contenido y las tablas largas continúan debajo de la banda), Word (encabezado de Word) y Excel (encabezado de impresión, solo texto).
+- Marcadores **`{DOCPAGE}` / `{DOCPAGES}`**: página y total del documento en `footer` y `pageHeader`; en un archivo unido cada documento numera desde 1 (en Word, sección con numeración propia).
+- **Quiebres anidados**: `breakBy` acepta una lista (`["REGION", "SUCURSAL"]`); `breakTitle` y `breakLabel` aceptan una lista por nivel. En Excel cada nivel usa `SUBTOTAL()` sobre su grupo.
+- **`breakPage`**: cada grupo del primer nivel en una página nueva (PDF y Word; salto de impresión en Excel). El total general sale al final, sobre todas las filas.
+- **Van / Vienen** (`carry`, PDF): acumulado de las columnas al pie de cada página y al inicio de la siguiente.
+- Sección **`pivot`** (tabla cruzada): `rows`, `cols`, `value`, `fn` (`sum`, `avg`, `min`, `max`, `count`), orden de columnas (`colOrder`, `sortCols`), totales por fila y por columna. Se dibuja como una `tabla` y admite sus propiedades.
+- **PDF con contraseña** (`pdf.password`, `ownerPassword`, `permissions`; opción `pdfPassword` en `novaReport.run`). Acepta plantillas: una contraseña por documento en un lote.
+- **Anexar PDFs** (`append`): PDFs de una columna BLOB (del documento o de una fuente) o de una URL, después de las páginas de cada documento. Usa pdf-lib 1.17.1, que se carga solo si el diseño trae `append`.
+- Sin cambios para diseños existentes: los archivos de prueba de 1.22.0 salen idénticos (fecha fija).
+- Ejemplo nuevo: `13-estado-cuenta`. Pruebas nuevas en `test/run.js` (`pdf-lib` agregado a `devDependencies`).
+- Designer 0.21.0: componente **Tabla cruzada**; en Documento, grupos **Encabezado de página**, **PDF: contraseña** y **PDF: anexar documentos**; en Tabla, **niveles de quiebre** (agregar, ordenar, quitar), **un grupo por página** y **Van / Vienen**; la galería de imágenes sirve también para el logo del encabezado de página.
+
 ## 1.22.0
 - **Hipervínculos** en PDF, Excel y Word:
   - Texto enriquecido: `[a=https://…]texto[/a]` (la URL admite plantillas: `[a=mailto:{CORREO}]{CORREO}[/a]`).

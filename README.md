@@ -1,7 +1,7 @@
 # novaReport — PDF, Excel y Word para Oracle APEX
 
-[![Versión](https://img.shields.io/badge/versión-1.21.0-1F4E79)](CHANGELOG.md)
-[![APEX](https://img.shields.io/badge/Oracle%20APEX-26.1%2B-C74634)](#requisitos)
+[![Versión](https://img.shields.io/badge/versión-1.23.0-1F4E79)](CHANGELOG.md)
+[![APEX](https://img.shields.io/badge/Oracle%20APEX-23.2%2B-C74634)](#requisitos)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green)](LICENSE)
 
 > 🇺🇸 [Read in English](README.en.md)
@@ -37,6 +37,9 @@ El servidor solo ejecuta las consultas; el documento se arma en el navegador con
 | **Diseño declarativo** | Encabezado, ficha de datos, tablas con totales (suma, promedio, mínimo, máximo, conteo), quiebres con subtotales, encabezados agrupados y estilos condicionales, alertas, texto enriquecido (negrita, cursiva, subrayado, tachado, colores, 3 letras, **hipervínculos**), imágenes (URL o **BLOB**), gráficos, **QR** y **Code 128**, marca de agua, líneas y elementos en **posición fija**. |
 | **Tarjetas y cuadrículas** | **Tarjetas** de resumen (etiqueta + valor destacado), fichas en **cuadrícula** con etiquetas coloreadas, **a la izquierda, arriba o sin etiqueta** por campo, y tablas con bordes y encabezado alineado a la izquierda o la derecha, iguales en los tres formatos. |
 | **Formularios editables** | Campos de texto, lista y casilla que el destinatario llena: AcroForm en PDF, controles de contenido en Word (protección *solo formularios* con contraseña) y celdas con validación en Excel (hoja protegida). |
+| **Paginación tipo Oracle Reports** | **Encabezado de página** con logo y número de página por documento, **quiebres anidados** con subtotales por nivel, **cada grupo en su página** y renglones **Van / Vienen** al cambiar de página. |
+| **Tabla cruzada** | Sección **`pivot`**: filas por una o varias columnas, una columna por valor (meses, sucursales…) y totales por fila y por columna. |
+| **PDF protegido y anexos** | **Contraseña** y permisos del PDF (por documento) y **anexar PDFs** guardados en BLOB o en *Static Files* al final de cada documento. |
 | **Columnas** | Casillas **lado a lado** (logo y datos, cliente y totales, firmas) que se ven igual en PDF y Word, y como bloques de columnas en Excel. |
 | **Lógica en el diseño** | Secciones y columnas que aparecen **según condiciones** (`when`), montos **en letras** (`MIL DOSCIENTOS BALBOAS CON 50/100`) y formatos de valor. |
 | **Guardar en el servidor** | Además de entregarlo, sube el archivo generado a un proceso de su aplicación para **archivarlo, enviarlo por correo o registrar la ejecución**. |
@@ -166,7 +169,7 @@ Con salida **ZIP** obtiene un archivo por empleado; con **Un solo archivo**, tod
 
 ## Ejemplos
 
-En [`examples/`](examples) hay nueve ejemplos listos para copiar (del 01 al 07 con EMP / DEPT; 08 y 09 solo con `DUAL`):
+En [`examples/`](examples) hay ejemplos listos para copiar (del 01 al 07 con EMP / DEPT; del 08 en adelante solo con `DUAL`):
 
 | Ejemplo | Qué muestra |
 |---|---|
@@ -179,6 +182,10 @@ En [`examples/`](examples) hay nueve ejemplos listos para copiar (del 01 al 07 c
 | [07 · Gráficos y códigos](examples/07-graficos-codigos) | Gráfico de barras y de anillo, tabla con quiebres y subtotales, QR, Code 128 y marca de agua condicional. |
 | [08 · Factura con columnas](examples/08-factura-columnas) | Cliente y código de barras lado a lado, monto en letras junto a los totales y dos firmas en la misma línea. |
 | [09 · Cover Sheet de crédito](examples/09-cover-sheet) | Tarjetas de resumen, fichas en cuadrícula, tablas con bordes y encabezado a la izquierda, totales en color y firmas. |
+| [10 · Reclamo de gastos médicos](examples/10-reclamo-gastos-medicos) | Grupos con marco, formulario y repetición por fila. |
+| [11 · Cheque](examples/11-cheque) | Tamaño de página propio y monto en letras. |
+| [12 · Hipervínculos](examples/12-hipervinculos) | Vínculos en texto, columnas, ficha e imagen; URL de páginas de APEX. |
+| [13 · Estado de cuenta](examples/13-estado-cuenta) | Encabezado de página, tabla cruzada, quiebres anidados y Van / Vienen. |
 
 Cada carpeta trae `fuentes.sql` (atributo **Fuentes SQL**) y `diseno.json` (atributo **Diseño**). Guía paso a paso en [examples/README.md](examples/README.md).
 
@@ -232,6 +239,8 @@ test/        Prueba en Node que genera todos los ejemplos sin APEX
 | Posición fija | `x` / `y` solo aplican al PDF, en la página donde se dibujan. | |
 | Formularios en PDF | La protección no se cifra y todos los campos usan Helvetica con el tamaño del primer formulario. | Para un formulario protegido con contraseña use Word o Excel. |
 | Contraseña de Word | De 1 a 15 caracteres ASCII (sin tildes ni ñ). | |
+| Contraseña del PDF | Cifrado RC4 de 40 bits (el que trae jsPDF); no se combina con `append`. | Para cifrado fuerte, proteja el archivo en el servidor (proceso de `save`). |
+| Van / Vienen | Solo PDF. | |
 | Tamaño | Máximo 250,000 filas por petición; el lote y el ZIP se arman en memoria del navegador. | Divida lotes muy grandes. |
 | Atributos | 4000 caracteres. | Origen **Consulta**: diseño y fuentes en una tabla (CLOB). |
 

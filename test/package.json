@@ -16,7 +16,8 @@
     "jspdf-autotable": "3.8.4",
     "jszip": "3.10.1",
     "pizzip": "3.1.8",
-    "qrcode-generator": "1.4.4"
+    "qrcode-generator": "1.4.4",
+    "pdf-lib": "1.17.1"
   },
   "engines": {
     "node": ">=18"

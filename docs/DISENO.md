@@ -34,6 +34,9 @@ Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) es
   "fileName": "estado_{DOC.CLIENTE}",
   "emptyMessage": "No hay datos para este filtro.",
   "watermark": { "text": "BORRADOR", "when": "ESTADO != 'APROBADO'" },
+  "pageHeader": { "image": { "url": "#APP_FILES#logo.png" }, "left": "Mi empresa", "right": "Página {DOCPAGE} de {DOCPAGES}" },
+  "pdf": { "password": "{DOC.CEDULA}", "permissions": ["print"] },
+  "append": [ { "source": "ANEXOS", "field": "ARCHIVO" } ],
   "sections": [ ],
   "footer": { "left": "Confidencial", "right": "Página {PAGE} de {PAGES}", "size": 7 },
   "defs": { },
@@ -61,8 +64,11 @@ Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) es
 | `fileName` | `reporte` | Nombre de cada documento, sin extensión. Acepta plantillas (`{DOC.X}`, `{TODAY}`). |
 | `emptyMessage` | `No hay datos para generar el reporte.` | Mensaje si `DOCS` no trae filas. |
 | `watermark` | — | Texto en diagonal sobre cada página. Ver [Marca de agua](#marca-de-agua). |
+| `pageHeader` | — | Encabezado de cada página (logo y textos). Ver [Encabezado de página](#encabezado-de-página). |
+| `pdf` | — | Contraseña y permisos del PDF. Ver [PDF con contraseña](#pdf-con-contraseña). |
+| `append` | — | PDFs que se anexan al final de cada documento. Ver [Anexar PDFs](#anexar-pdfs). |
 | `sections` | — | Lista de [secciones](#secciones), en orden. |
-| `footer.left` / `footer.right` | — | Pie de cada página. `{PAGE}` y `{PAGES}` solo funcionan aquí. |
+| `footer.left` / `footer.right` | — | Pie de cada página. `{PAGE}` y `{PAGES}` (todo el archivo) y `{DOCPAGE}` y `{DOCPAGES}` (el documento, en un archivo unido) solo funcionan aquí y en `pageHeader`. |
 | `footer.size` | `7` | Tamaño de letra del pie (PDF y Word). |
 | `defs` | — | Bloques reutilizables. Ver [defs](#reutilizar-partes-defs). |
 | `xlsx` | — | Hojas de Excel. Ver [Excel](#excel-hojas). |
@@ -83,7 +89,8 @@ Cualquier texto (`title`, `label`, `value`, `text`, `fileName`…) puede incluir
 | `{ITEM.P1_X}` | Valor **actual en pantalla** de un ítem (`apex.item().getValue()`), no el de sesión. |
 | `{NOW}` | Fecha y hora local del navegador: `19/10/2026 14:05`. |
 | `{TODAY}` | Fecha: `19/10/2026`. |
-| `{PAGE}` / `{PAGES}` | Página actual / total. Solo en `footer`. |
+| `{PAGE}` / `{PAGES}` | Página actual / total del archivo. Solo en `footer` y `pageHeader`. |
+| `{DOCPAGE}` / `{DOCPAGES}` | Página / total del documento: en un archivo unido (`merge`) cada documento cuenta desde 1. Solo en `footer` y `pageHeader`. |
 | `{COL\|formato}` | Valor con [formato](#formatos-de-valor): `{SALDO\|money}`. |
 
 Un marcador sin valor se reemplaza por texto vacío.
@@ -366,9 +373,11 @@ Se combina con `span` y huecos. En una misma fila pueden convivir campos con la 
 | `grid` | — | `true`: bordes finos en PDF, Excel y Word. `false`: sin bordes también en Word. Sin definir: como antes (solo Word lleva bordes). |
 | `borderColor` | `#D5DCE3` | Color de los bordes con `grid: true`. |
 | `totalsColor` | — | Color del texto de la fila de totales y subtotales. |
-| `breakBy` | — | Quiebre de control: agrupa filas **consecutivas** con el mismo valor de esta columna. Ver abajo. |
-| `breakTitle` | `{COL}` | Fila de encabezado de cada grupo. Acepta `{COL}` (primera fila del grupo) y `{COUNT}`. `false`: sin encabezado. |
-| `breakLabel` | `Subtotal {COL}` | Texto de la fila de subtotal. Acepta `{COL}` y `{COUNT}`. |
+| `breakBy` | — | Quiebre de control: agrupa filas **consecutivas** con el mismo valor de esta columna. Una lista (`["REGION", "SUCURSAL"]`) arma quiebres anidados. Ver abajo. |
+| `breakTitle` | `{COL}` | Fila de encabezado de cada grupo. Acepta `{COL}` (primera fila del grupo) y `{COUNT}`. `false`: sin encabezado. Con varios niveles, una lista por nivel. |
+| `breakLabel` | `Subtotal {COL}` | Texto de la fila de subtotal. Acepta `{COL}` y `{COUNT}`. Con varios niveles, una lista por nivel; `false` en un nivel omite su subtotal. |
+| `breakPage` | `false` | Cada grupo del primer nivel empieza en una página nueva (PDF y Word; en Excel, salto de página de impresión). |
+| `carry` | — | PDF: renglón **Van** al pie de cada página y **Vienen** al inicio de la siguiente, con el acumulado de las columnas. `true` (columnas de `totals`), `["COL"]` o `{ "cols": ["COL"], "label": "Van", "labelFrom": "Vienen" }`. Solo suma. |
 | `breakTotals` | = `totals` | Columnas a subtotalizar (mismo formato que `totals`). `false`: sin fila de subtotal. |
 
 **Columnas:**
@@ -434,6 +443,49 @@ Los grupos se aplican en orden, de izquierda a derecha. Un grupo sin `label` dej
 Como en Oracle Reports, el grupo cambia cuando cambia el valor: **ordene la consulta por la columna de quiebre** (`ORDER BY dname, …`). La columna de quiebre no necesita estar en `columns`. Cada grupo lleva una fila de encabezado (`breakTitle`), sus filas y una fila de subtotal (`breakLabel`) con la suma de `breakTotals` (o de `totals`). El total general sigue saliendo en `totals`.
 
 En Excel los subtotales son `=SUBTOTAL(9; …)` y el total general también, para no sumar dos veces; con `breakBy` la hoja no lleva autofiltro. En PDF las filas alternas se cuentan solo sobre filas de datos.
+
+**Quiebres anidados (1.23):**
+
+```json
+{ "type": "tabla", "source": "MOVS", "columns": ["FECHA", "CONCEPTO", { "col": "MONTO", "fmt": "money" }],
+  "breakBy": ["SUCURSAL", "TIPO"],
+  "breakTitle": ["Sucursal: {SUCURSAL}", "{TIPO} ({COUNT})"],
+  "breakLabel": ["Total {SUCURSAL}", "Total {TIPO}"],
+  "totals": ["MONTO"], "breakPage": true, "carry": true }
+```
+
+Ordene la consulta por todas las columnas de quiebre, en el mismo orden (`ORDER BY sucursal, tipo, …`). Un cambio en un nivel cierra también los niveles internos. Los encabezados de niveles internos usan un tono más claro de `theme.group`. En Excel cada subtotal es `SUBTOTAL()` sobre su grupo: los subtotales internos no se suman dos veces.
+
+**Van / vienen:** solo PDF. El renglón **Van** queda debajo de la última fila de la página y **Vienen** encima del encabezado de la tabla en la página siguiente, con la suma de las filas de datos ya impresas. Las filas no se parten entre páginas. Word y Excel paginan por su cuenta y no lo muestran.
+
+### `pivot`
+
+Tabla cruzada (matriz): una fila por cada combinación de `rows` y una columna por cada valor de `cols`, con el agregado de `value`. Se dibuja como una [`tabla`](#tabla), así que admite sus propiedades (`title`, `grid`, `breakBy`, `rowStyle`, `size`…).
+
+```json
+{ "type": "pivot", "title": "Ventas por sucursal y mes", "source": "VENTAS",
+  "rows": ["REGION", "SUCURSAL"], "rowLabels": ["Región", "Sucursal"],
+  "cols": "PERIODO", "sortCols": true, "value": "MONTO", "fn": "sum", "fmt": "money" }
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `rows` | — | Columna o lista de columnas que forman cada fila. |
+| `rowLabels` | nombre de la columna | Encabezado de las columnas de `rows`. |
+| `cols` | — | Columna cuyos valores pasan a ser columnas. |
+| `value` | — | Columna a agregar. |
+| `fn` | `sum` | `sum`, `avg`, `min`, `max` o `count` (`count` sin `value` cuenta filas). |
+| `fmt` | según `fn` | [Formato](#formatos-de-valor) de las celdas y totales. |
+| `colLabel` | `{COLS}` | Encabezado de cada columna; plantilla con la primera fila de ese valor: `"Mes {NMES}"`. |
+| `colOrder` | orden de aparición | Lista con el orden de las columnas; los valores que falten van al final. |
+| `sortCols` | `false` | Ordena las columnas de menor a mayor (números o texto). |
+| `maxCols` | — | Máximo de columnas. |
+| `rowTotals` | `true` | Columna de total por fila (si hay más de una columna). |
+| `colTotals` | `true` | Fila de totales por columna (usa `fn`; con `count`, suma los conteos). |
+| `totalLabel` | `Total` | Texto de la columna y de la fila de totales. |
+| `empty` | vacío | Valor de las celdas sin datos (p. ej. `0`). |
+
+Sin `colOrder` ni `sortCols`, las columnas salen en el orden de la consulta. En Excel las celdas son números y los totales, fórmulas. Con `fn: "avg"`, el total de cada columna es el promedio de las filas, no de los datos originales.
 
 ### `alerta`
 
@@ -708,6 +760,69 @@ Desde 1.22 el texto, las celdas de tabla, los valores de ficha y las imágenes p
 - Estilo: subrayado y en `page.theme.link` (`#0563C1` por defecto). Un `[c=…]` dentro del vínculo, el `color` de la columna o el color de una regla (`cellStyle`, `rowStyle`, `fields[].color`) tienen prioridad.
 - **PDF:** zona cliqueable sobre el texto (o sobre toda la celda en tablas y fichas). **Word:** `w:hyperlink`. **Excel:** vínculo de celda; Excel admite uno por celda, así que un párrafo con varios vínculos toma el primero. Una celda numérica con `href` se exporta como texto con el formato de la columna.
 
+### Encabezado de página
+
+`pageHeader` dibuja una banda en la parte superior de cada página: una imagen (izquierda, centro o derecha) y tres textos (izquierda, centro y derecha) con una línea debajo.
+
+```json
+"pageHeader": {
+  "image": { "url": "#APP_FILES#logo.png" },
+  "left": { "text": "NovaCode, S.A.\nEstado de cuenta", "bold": true, "size": 9 },
+  "center": "{DOC.CLIENTE}",
+  "right": "Página {DOCPAGE} de {DOCPAGES}",
+  "firstPage": true
+}
+```
+
+| Propiedad | Defecto | Descripción |
+|---|---|---|
+| `left` / `center` / `right` | — | Texto (plantilla, `\n` para otra línea) o `{ "text", "size", "bold", "color" }`. Acepta `{PAGE}`, `{PAGES}`, `{DOCPAGE}` y `{DOCPAGES}`. |
+| `image` | — | `{ "url" }` (o `field` con una columna BLOB del documento), `width` / `height` en mm y `align`: `left` (defecto), `center` o `right`. Sin tamaño, toma el alto de la banda. Al centro ocupa el lugar del texto central. |
+| `height` | `12` | Alto de la banda en mm. |
+| `top` | `5` | Distancia desde el borde superior (PDF). |
+| `gap` | `3` | Espacio entre la banda y el contenido (PDF). |
+| `size` / `bold` / `color` | `8` / `false` / `#000000` | Estilo por defecto de los tres textos. |
+| `fill` | — | Fondo de la banda. |
+| `line` | `true` | Línea inferior; `lineColor` (defecto `theme.primary`) y `lineWidth` (`0.3`). |
+| `firstPage` | `true` | `false`: no se dibuja en la primera página de cada documento (por ejemplo, cuando la primera lleva un `header` grande). |
+
+- **PDF:** el contenido de cada página empieza debajo de la banda; las tablas largas continúan debajo de ella. Un `header` de sección queda debajo de la banda.
+- **Word:** tabla sin bordes en el encabezado de Word. `{DOCPAGES}` usa el total de páginas de la sección; en un archivo unido cada documento numera desde 1.
+- **Excel:** encabezado de impresión (`&L &C &R`): solo texto; `{PAGE}` y `{DOCPAGE}` pasan a `&P`, y `{PAGES}` y `{DOCPAGES}` a `&N`.
+
+### PDF con contraseña
+
+```json
+"pdf": { "password": "{DOC.CEDULA}", "ownerPassword": "admin", "permissions": ["print"] }
+```
+
+| Propiedad | Descripción |
+|---|---|
+| `password` | Contraseña para abrir el PDF. Acepta plantillas: cada documento de un lote puede tener la suya. |
+| `ownerPassword` | Contraseña de propietario (quita las restricciones). Por defecto, la misma de `password`. |
+| `permissions` | Lo que se permite con la contraseña de apertura: `print`, `copy`, `modify`, `annot-forms`. Defecto: `["print"]`. |
+
+La opción `pdfPassword` de `novaReport.run` (por ejemplo, desde un ítem de la página en el *Initialization JavaScript Code*) reemplaza a `password`. Solo PDF. El cifrado de jsPDF es RC4 de 40 bits: sirve para que el archivo no se abra sin la clave, no para documentos que requieren cifrado fuerte. No se combina con `append`.
+
+### Anexar PDFs
+
+```json
+"append": [
+  { "source": "SOPORTES", "field": "ARCHIVO" },
+  { "url": "#APP_FILES#terminos.pdf", "when": "TIPO == 'PRESTAMO'" }
+]
+```
+
+Después de las páginas de cada documento se agregan, en orden, los PDFs de cada elemento:
+
+| Propiedad | Descripción |
+|---|---|
+| `field` | Columna BLOB con un PDF. Sin `source`, se toma de `DOCS`; con `source`, se anexa el PDF de cada fila de esa fuente (que se reparte por `DOC_KEY`). |
+| `url` | PDF fijo (admite `#APP_FILES#`). Se descarga una sola vez. |
+| `when` | [Condición](#condiciones) por documento. |
+
+Solo PDF; usa la librería **pdf-lib** (se carga sola cuando el diseño trae `append`). Las páginas anexas no llevan encabezado, pie ni marca de agua y no cuentan en `{PAGES}`. Un PDF anexo protegido con contraseña se agrega tal cual si el lector lo permite; uno dañado detiene el reporte con `No se pudo anexar el PDF: …`.
+
 ### `espacio` y `salto`
 
 ```json
@@ -747,6 +862,12 @@ Desde 1.22 el texto, las celdas de tabla, los valores de ficha y las imágenes p
 | `grafico` | ✓ | ✓ imagen | ✓ |
 | `codigo` | ✓ vectorial | ✓ imagen | ✓ |
 | `tabla.breakBy` | ✓ | ✓ `SUBTOTAL()` | ✓ |
+| `tabla.breakBy` con varios niveles | ✓ | ✓ `SUBTOTAL()` anidado | ✓ |
+| `tabla.breakPage` | ✓ página nueva | ✓ salto de impresión | ✓ página nueva |
+| `tabla.carry` (van / vienen) | ✓ | — | — |
+| `pivot` | ✓ | ✓ números y fórmulas | ✓ |
+| `pageHeader` | ✓ | texto (encabezado de impresión) | ✓ |
+| `pdf` (contraseña) y `append` | ✓ | — | — |
 | `watermark` | ✓ | — | ✓ detrás del texto |
 | `linea` | ✓ | — | ✓ horizontal |
 | `linea` con `x1…y2` | ✓ | — | — |

@@ -69,7 +69,7 @@ select count(*) clientes, sum(saldo) saldo_total from clientes
 - `BLOB` (PNG/JPG) llega en base64, para `imagen` con `field`.
 - Binds: ítems de página/aplicación (`:P5_ID`, `:APP_USER`) toman el valor de sesión. Cualquier otro (`:ID_CLIENTE`) viene del atributo `data-id-cliente` del elemento que se pulsó, siempre como **texto** o `NULL`. Usa el patrón `(:X is null or col = :X)` para que la misma acción sirva para uno o todos.
 - **Seguridad**: los `data-*` los puede alterar el usuario. Si el reporte muestra datos por cliente, cuenta o empleado, valida acceso en el SQL (`and exists (select 1 from accesos a where a.usuario = :APP_USER and ...)`).
-- Con `breakBy` en una tabla, **ordena la consulta por la columna de quiebre**.
+- Con `breakBy` en una tabla, **ordena la consulta por la columna de quiebre** (con varios niveles, por todas, en el mismo orden).
 - Máximo 250,000 filas sumando todas las fuentes. Agrega en SQL lo que se pueda (totales, resúmenes) en lugar de traer el detalle.
 - Sin `;` ni `/` necesarios (se eliminan). Oracle 19c o superior: usa sintaxis compatible con 19c salvo que el usuario diga otra cosa.
 
@@ -102,6 +102,11 @@ select count(*) clientes, sum(saldo) saldo_total from clientes
 | Resumen de 3–6 indicadores arriba | `tarjetas` |
 | Datos de un registro (etiqueta: valor) | `ficha` (`grid: true` para cuadrícula) |
 | Listado, detalle, plan de pagos | `tabla` (`totals`, `breakBy`, `groups`, `rowStyle`) |
+| Quiebres anidados, un grupo por página, Van / Vienen | `tabla` con `breakBy: ["A","B"]`, `breakPage`, `carry` |
+| Tabla cruzada (meses en columnas, totales por fila y columna) | `pivot` (`rows`, `cols`, `value`, `fn`) |
+| Logo y número de página en cada página | `pageHeader` (raíz del diseño; `{DOCPAGE}`/`{DOCPAGES}`) |
+| PDF con contraseña | `pdf: { "password": "{DOC.X}" }` (raíz) |
+| Anexar PDFs guardados en BLOB | `append: [{ "source": "X", "field": "ARCHIVO" }]` (raíz, solo PDF) |
 | Mensaje condicional destacado | `alerta` |
 | Carta, párrafos, cláusulas | `texto` (`**negrita**`, `*cursiva*`, `[c=#hex]…[/c]`) |
 | Vínculos (web, correo, detalle por fila) | `[a=URL]…[/a]` en `texto`; `href` en columnas de `tabla`, campos de `ficha` e `imagen` |

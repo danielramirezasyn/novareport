@@ -5,6 +5,8 @@ window.jspdf = require('jspdf'); require('jspdf-autotable');
 window.ExcelJS = require('exceljs'); window.JSZip = require('jszip'); window.docx = require('docx');
 window.PizZip = require('pizzip'); window.docxtemplater = require('docxtemplater');
 window.qrcode = require('qrcode-generator');
+/* pdf-lib: anexar PDFs (1.23). Si no está instalado se omite esa prueba */
+try { window.PDFLib = require('pdf-lib'); } catch (e) { console.warn('Paquete "pdf-lib" no disponible: se omite la prueba de anexos.'); }
 /* Chart.js se publica como UMD dentro de un paquete "type": "module": se evalúa como script */
 { const m = { exports: {} }; new Function('module', 'exports', require('fs').readFileSync(require.resolve('chart.js').replace(/[^\\/]+$/, '') + 'chart.umd.js', 'utf8'))(m, m.exports); window.Chart = m.exports; }
 /* Gráficos y marca de agua en Word dibujan en un <canvas>: en Node se usa el paquete "canvas" (opcional) */
@@ -100,6 +102,20 @@ data['08-factura-columnas'] = {
     FACILIDAD: T({ MONEDA: 'NIO', MONTO: 5656656565, FORMA_PAGO: 'Capital e intereses al vencimiento' }),
     GARANTIA: T({ TIPO: 'Fianza corporativa', DESCRIPCION: 'YYYYYY', MONEDA: 'USD', VALOR: 343444, COBERTURA: 50, AVALUO: '21-Oct-26' }),
     FIRMAS: T({ F1_NOMBRE: 'Mónica Vega', F1_CARGO: 'Analista de Riesgo' }) }; }
+/* 13: estado de cuenta (1.23) con los mismos datos que fuentes.sql */
+{ const L = []; for (let n = 1; n <= 60; n++) { L.push(n); }
+  const f2 = d => String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear();
+  const rows = [];
+  for (const [suc, so] of [['Casa Matriz', 1], ['Sucursal Arraiján', 2]]) {
+    for (const [tipo, to] of [['Crédito', 1], ['Débito', 2]]) {
+      const m = L.map(n => { const d = new Date(Date.UTC(2026, 7 + n % 3, 1 + (n * 7) % 27));
+        return { n, d, monto: tipo === 'Débito' ? -Math.round((20 + (n * 53) % 400 + (n % 5) / 10) * 100) / 100 : Math.round((50 + (n * 37) % 950 + (n % 7) / 10) * 100) / 100 }; });
+      m.sort((a, b) => a.d - b.d || a.n - b.n).forEach(x => rows.push([1, suc, tipo, f2(x.d), x.d.toISOString().substr(0, 7), 'Operación ' + String(x.n).padStart(4, '0'), x.monto]));
+    }
+  }
+  data['13-estado-cuenta'] = {
+    DOCS: { cols: [U('DOC_KEY'), N('CLIENTE'), N('RUC'), N('CUENTA')], rows: [[1, 'NOVACODE, S.A.', '155771259-2-2025', 'CTA-000123']] },
+    MOVS: { cols: [U('DOC_KEY'), N('SUCURSAL'), N('TIPO'), { name: 'FECHA', type: 'DATE' }, N('PERIODO'), N('CONCEPTO'), U('MONTO')], rows } }; }
 const runs = [['01-listado-empleados', 'pdf', 'file'], ['01-listado-empleados', 'xlsx', 'file'], ['01-listado-empleados', 'docx', 'file'],
   ['02-cartas-zip', 'pdf', 'zip'], ['02-cartas-zip', 'pdf', 'merge'], ['03-constancia-posicion-fija', 'pdf', 'file'],
   ['04-imagen-blob', 'pdf', 'zip'], ['04-imagen-blob', 'docx', 'zip'],
@@ -108,7 +124,8 @@ const runs = [['01-listado-empleados', 'pdf', 'file'], ['01-listado-empleados', 
   ['06-plantilla-word', 'docx-template', 'zip', '06-plantilla-word/plantilla.docx'],
   ['07-graficos-codigos', 'pdf', 'file'], ['07-graficos-codigos', 'xlsx', 'file'], ['07-graficos-codigos', 'docx', 'file'],
   ['08-factura-columnas', 'pdf', 'file'], ['08-factura-columnas', 'xlsx', 'file'], ['08-factura-columnas', 'docx', 'file'],
-  ['09-cover-sheet', 'pdf', 'file'], ['09-cover-sheet', 'xlsx', 'file'], ['09-cover-sheet', 'docx', 'file']];
+  ['09-cover-sheet', 'pdf', 'file'], ['09-cover-sheet', 'xlsx', 'file'], ['09-cover-sheet', 'docx', 'file'],
+  ['13-estado-cuenta', 'pdf', 'file'], ['13-estado-cuenta', 'xlsx', 'file'], ['13-estado-cuenta', 'docx', 'file']];
 
 fs.mkdirSync(OUT, { recursive: true });
 (async () => {
@@ -116,6 +133,7 @@ fs.mkdirSync(OUT, { recursive: true });
     if (ex === '07-graficos-codigos' && !CANVAS) { console.log('OMITIDO', ex, format); continue; }
     const layout = JSON.parse(fs.readFileSync(path.join(EX, ex, 'diseno.json'), 'utf8'));
     (layout.sections || []).forEach(s => { if (s.type === 'imagen' && s.url) { s.url = '#APP_FILES#' + logo.toString('base64'); } });
+    if (layout.pageHeader && layout.pageHeader.image && layout.pageHeader.image.url) { layout.pageHeader.image.url = '#APP_FILES#' + logo.toString('base64'); }
     const t = Date.now();
     const r = await window.novaReport.build({ layout, format, output, templateUrl, zipType: 'nodebuffer' }, data[ex]);
     const name = ex + '__' + format + '_' + output + '__' + r.name;
@@ -468,5 +486,129 @@ fs.mkdirSync(OUT, { recursive: true });
       }
       console.log('OK  ', 'vinculos-122__' + format + '__' + r.name);
     }
+  }
+  /* 1.23: encabezado de página, quiebres multinivel, van/vienen, salto por grupo, pivot, contraseña y anexos */
+  {
+    const zlib = require('zlib');
+    /* Texto de un PDF: une los streams (inflados si vienen comprimidos) */
+    const pdfText = buf => {
+      const s = buf.toString('latin1'), out = []; const re = /(?<!end)stream\r?\n/g; let m;
+      while ((m = re.exec(s))) {
+        const a = m.index + m[0].length, b = s.indexOf('endstream', a);
+        if (b < 0) { break; }
+        const raw = buf.subarray(a, b);
+        try { out.push(zlib.inflateSync(raw).toString('latin1')); } catch (e) { out.push(raw.toString('latin1')); }
+        re.lastIndex = b;
+      }
+      return out.join('\n');
+    };
+    const save = (name, buf) => fs.writeFileSync(path.join(OUT, name), buf);
+    const B = async (layout, format, output, d, params) => {
+      const r = await window.novaReport.build({ layout, format, output, params: params || {}, zipType: 'nodebuffer' }, d);
+      return { r, buf: Buffer.from(r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : r.data) };
+    };
+    const xmlOf = async (buf, part) => (await window.JSZip.loadAsync(buf)).file(part).async('string');
+    /* Encabezado de página: dos documentos unidos, sin encabezado en la primera página de cada uno */
+    const rows = []; for (let i = 0; i < 120; i++) { const e = EMP[i % 14]; rows.push([i % 2 + 1, e[1] + '_' + i, e[2], DEPT[e[6]][0], e[4]]); }
+    const dph = { DOCS: { cols: [U('DOC_KEY'), N('CLIENTE')], rows: [[1, 'Banco Uno'], [2, 'Banco Dos']] },
+                  MOVS: { cols: [U('DOC_KEY'), N('ENAME'), N('JOB'), N('DNAME'), U('SAL')], rows } };
+    const lph = { fileName: 'encabezado-123',
+      pageHeader: { image: { url: 'data:image/png;base64,' + logo.toString('base64') }, left: { text: 'NovaCode, S.A.\nEstado de cuenta', bold: true },
+                    center: '{DOC.CLIENTE}', right: 'Pag. {DOCPAGE} de {DOCPAGES}', firstPage: false },
+      sections: [{ type: 'header', title: 'Estado {DOC.CLIENTE}' }, { type: 'tabla', source: 'MOVS', columns: ['ENAME', 'JOB', 'DNAME', 'SAL'], totals: ['SAL'] }],
+      footer: { left: 'Uso interno', right: 'Pagina {PAGE} de {PAGES} doc {DOCPAGE}/{DOCPAGES}' } };
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const { r, buf } = await B(lph, format, 'merge', dph);
+      save('encabezado-123__' + format + '__' + r.name, buf);
+      if (format === 'pdf') {
+        const t = pdfText(buf);
+        if ((t.match(/\(NovaCode, S\.A\.\) Tj/g) || []).length !== 2) { throw new Error('pdf encabezado de página: ' + (t.match(/\(NovaCode, S\.A\.\) Tj/g) || []).length); }
+        for (const w of ['(Pag. 2 de 2) Tj', '(Pagina 3 de 4 doc 1/2) Tj', '(Pagina 4 de 4 doc 2/2) Tj']) { if (t.indexOf(w) < 0) { throw new Error('pdf falta ' + w); } }
+      }
+      if (format === 'xlsx') {
+        const x = await xmlOf(buf, 'xl/worksheets/sheet1.xml');
+        if (!/differentFirst="1"/.test(x) || !/&amp;CBanco Uno|&amp;C&amp;8Banco Uno/.test(x) || !/Pag\. &amp;P de &amp;N/.test(x)) { throw new Error('xlsx encabezado de impresión'); }
+      }
+      if (format === 'docx') {
+        const z = await window.JSZip.loadAsync(buf), x = await z.file('word/document.xml').async('string');
+        if ((x.match(/<w:titlePg\/>/g) || []).length !== 2 || (x.match(/<w:pgNumType w:start="1"\/>/g) || []).length !== 2) { throw new Error('docx secciones'); }
+        const hs = await Promise.all(Object.keys(z.files).filter(n => /word\/header\d+\.xml$/.test(n)).map(n => z.file(n).async('string')));
+        if (!hs.some(h => /NovaCode, S\.A\./.test(h) && /SECTIONPAGES/.test(h))) { throw new Error('docx encabezado de página'); }
+      }
+      console.log('OK  ', 'encabezado-123__' + format + '__' + r.name);
+    }
+    /* Quiebres multinivel + van / vienen, y salto de página por grupo */
+    const qr = [];
+    ['NORTE', 'SUR'].forEach(reg => ['Casa Matriz', 'Sucursal 2'].forEach(suc => { for (let i = 0; i < 40; i++) { const e = EMP[i % 14]; qr.push([reg, suc, e[1] + '_' + i, e[4]]); } }));
+    const dq = { MOVS: { cols: [N('REGION'), N('SUCURSAL'), N('CLIENTE'), U('MONTO')], rows: qr } };
+    const tq = { type: 'tabla', source: 'MOVS', columns: ['REGION', 'SUCURSAL', 'CLIENTE', { col: 'MONTO', fmt: 'money' }], totals: ['MONTO'],
+                 breakBy: ['REGION', 'SUCURSAL'], breakTitle: ['Region {REGION}', 'Sucursal {SUCURSAL} ({COUNT})'],
+                 breakLabel: ['Total region {REGION}', 'Total {SUCURSAL}'], carry: true };
+    for (const bp of [false, true]) {
+      const lq = { fileName: 'quiebres-123-' + (bp ? 'pagina' : 'multi'), sections: [Object.assign({}, tq, { breakPage: bp })], footer: { right: 'Pagina {PAGE} de {PAGES}' } };
+      for (const format of ['pdf', 'xlsx', 'docx']) {
+        const { r, buf } = await B(lq, format, 'file', dq);
+        save('quiebres-123__' + format + '__' + r.name, buf);
+        if (format === 'pdf') {
+          const t = pdfText(buf), van = (t.match(/\(Van\) Tj/g) || []).length, vie = (t.match(/\(Vienen\) Tj/g) || []).length;
+          if (!van || van !== vie) { throw new Error('pdf van/vienen ' + van + '/' + vie); }
+          for (const w of ['(Total region NORTE) Tj', '(Total region SUR) Tj', '(339,300.00) Tj', '(Sucursal Sucursal 2 \\(40\\)) Tj']) { if (t.indexOf(w) < 0) { throw new Error('pdf falta ' + w); } }
+          if (!bp && (!/\(110,500.00\) Tj/.test(t) || !/\(217,950.00\) Tj/.test(t))) { throw new Error('pdf monto de van/vienen'); }
+        }
+        if (format === 'xlsx') {
+          const x = await xmlOf(buf, 'xl/worksheets/sheet1.xml'), f = (x.match(/<f>[^<]*<\/f>/g) || []).join(' ');
+          const fw = 'SUBTOTAL(9,D4:D43) SUBTOTAL(9,D46:D85) SUBTOTAL(9,D4:D86) SUBTOTAL(9,D90:D129) SUBTOTAL(9,D132:D171) SUBTOTAL(9,D90:D172) SUBTOTAL(9,D2:D173)';
+          if (f.replace(/<\/?f>/g, '') !== fw) { throw new Error('xlsx subtotales anidados: ' + f); }
+          if (bp !== /<rowBreaks count="1"/.test(x)) { throw new Error('xlsx salto de página por grupo'); }
+        }
+        if (format === 'docx') {
+          const x = await xmlOf(buf, 'word/document.xml');
+          if ((x.match(/w:type="page"/g) || []).length !== (bp ? 1 : 0)) { throw new Error('docx salto de página por grupo'); }
+          if (x.indexOf('>Total region SUR<') < 0) { throw new Error('docx subtotal de nivel 1'); }
+        }
+        console.log('OK  ', 'quiebres-123__' + format + '__' + r.name);
+      }
+    }
+    /* Tabla cruzada */
+    const pv = []; [['NORTE', 'Casa Matriz'], ['NORTE', 'Sucursal 2'], ['SUR', 'Sucursal 3']].forEach(([rg, sc], j) => ['ENE', 'FEB', 'MAR'].forEach((ms, i) => {
+      if (!(j === 2 && i === 1)) { pv.push([rg, sc, ms, i + 1, 1000 * (j + 1) + i * 100.5]); } }));
+    const dpv = { VENTAS: { cols: [N('REGION'), N('SUCURSAL'), N('MES'), U('NMES'), U('MONTO')], rows: pv } };
+    const lpv = { fileName: 'pivot-123', sections: [
+      { type: 'pivot', source: 'VENTAS', rows: ['REGION', 'SUCURSAL'], rowLabels: ['Region', 'Sucursal'], cols: 'MES', colOrder: ['MAR', 'ENE'], value: 'MONTO', fmt: 'money' },
+      { type: 'pivot', source: 'VENTAS', rows: 'REGION', cols: 'NMES', sortCols: true, fn: 'count', colLabel: 'Mes {NMES}' }] };
+    for (const format of ['pdf', 'xlsx', 'docx']) {
+      const { r, buf } = await B(lpv, format, 'file', dpv);
+      save('pivot-123__' + format + '__' + r.name, buf);
+      if (format === 'xlsx') {
+        const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0], got = [];
+        ws.eachRow(row => got.push(row.values.slice(1).map(v => v && v.formula ? 'F' : v).join('|')));
+        const want = ['Region|Sucursal|MAR|ENE|FEB|Total', 'NORTE|Casa Matriz|1201|1000|1100.5|3301.5', 'NORTE|Sucursal 2|2201|2000|2100.5|6301.5',
+                      'SUR|Sucursal 3|3201|3000||6201', 'Totales|Totales|F|F|F|F', 'Region|Mes 1|Mes 2|Mes 3|Total', 'NORTE|2|2|2|6', 'SUR|1||1|2', 'Totales|F|F|F|F'];
+        if (got.filter(Boolean).join(' / ') !== want.join(' / ')) { throw new Error('xlsx pivot: ' + got.filter(Boolean).join(' / ')); }
+      }
+      console.log('OK  ', 'pivot-123__' + format + '__' + r.name);
+    }
+    /* PDF con contraseña: una por documento (plantilla) */
+    const dsec = { DOCS: { cols: [U('DOC_KEY'), N('CEDULA')], rows: [[1, '8-765-4321'], [2, '4-111-222']] }, EMP: { cols: [N('ENAME'), U('SAL')], rows: EMP.map(e => [e[1], e[4]]) } };
+    const lsec = { fileName: 'clave-123-{DOC.DOC_KEY}', pdf: { password: '{DOC.CEDULA}', permissions: ['print'] }, sections: [{ type: 'tabla', source: 'EMP' }] };
+    { const { r, buf } = await B(lsec, 'pdf', 'zip', dsec); save('clave-123__pdf__' + r.name, buf);
+      const z = await window.JSZip.loadAsync(buf), names = Object.keys(z.files).sort();
+      if (names.join(' ') !== 'clave-123-1.pdf clave-123-2.pdf') { throw new Error('pdf clave: ' + names.join(' ')); }
+      for (const n of names) { const s = Buffer.from(await z.file(n).async('uint8array')).toString('latin1'); if (!/\/Encrypt \d+ 0 R/.test(s) || !/\/P -60/.test(s)) { throw new Error('pdf sin cifrado ' + n); } }
+      const p2 = await B(Object.assign({}, lsec, { pdf: undefined }), 'pdf', 'merge', dsec);
+      if (/\/Encrypt/.test(p2.buf.toString('latin1'))) { throw new Error('pdf cifrado sin contraseña'); }
+      console.log('OK  ', 'clave-123__pdf__' + r.name); }
+    /* Anexar PDFs (BLOB por documento): las páginas anexas van después de cada documento */
+    if (window.PDFLib) {
+      const mk = n => { const d = new window.jspdf.jsPDF(); for (let i = 1; i < n; i++) { d.addPage(); } return Buffer.from(d.output('arraybuffer')).toString('base64'); };
+      const dap = { DOCS: { cols: [U('DOC_KEY'), N('CLIENTE'), { name: 'SOPORTE', type: 'BLOB' }], rows: [[1, 'Uno', mk(2)], [2, 'Dos', mk(3)]] } };
+      const lap = { fileName: 'anexos-123', append: [{ field: 'SOPORTE' }], sections: [{ type: 'texto', text: 'Documento {DOC.CLIENTE}' }] };
+      const { r, buf } = await B(lap, 'pdf', 'merge', dap); save('anexos-123__pdf__' + r.name, buf);
+      const n = (await window.PDFLib.PDFDocument.load(buf)).getPageCount();
+      if (n !== 7) { throw new Error('pdf anexos: ' + n + ' páginas'); }
+      let err = null; try { await B(Object.assign({ pdf: { password: 'x' } }, lap), 'pdf', 'merge', dap); } catch (e) { err = e.message; }
+      if (!/contraseña/.test(err || '')) { throw new Error('pdf anexos + contraseña debe fallar'); }
+      console.log('OK  ', 'anexos-123__pdf__' + r.name);
+    } else { console.log('OMITIDO anexos-123 (sin pdf-lib)'); }
   }
 })().catch(e => { console.error('FALLÓ', e); process.exit(1); });

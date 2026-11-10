@@ -1,0 +1,33 @@
+{
+  "page": { "size": "letter", "orientation": "portrait" },
+  "fileName": "estado_{DOC.CUENTA}",
+  "title": "Estado de cuenta {DOC.CUENTA}",
+  "pageHeader": {
+    "image": { "url": "#APP_FILES#logo.png" },
+    "height": 14,
+    "left": { "text": "NovaCode, S.A.\nEstado de cuenta", "bold": true, "size": 9 },
+    "center": "{DOC.CLIENTE}\nCuenta {DOC.CUENTA}",
+    "right": "Página {DOCPAGE} de {DOCPAGES}"
+  },
+  "footer": { "left": "Documento informativo · novaReport 1.23", "right": "Página {PAGE} de {PAGES}" },
+  "sections": [
+    { "type": "ficha", "source": "DOCS", "columns": 3, "grid": true, "fields": [
+      { "label": "Cliente", "value": "{CLIENTE}" },
+      { "label": "RUC", "value": "{RUC}" },
+      { "label": "Cuenta", "value": "{CUENTA}" } ] },
+    { "type": "pivot", "title": "Resumen por sucursal y mes", "source": "MOVS", "grid": true,
+      "rows": "SUCURSAL", "rowLabels": ["Sucursal"], "cols": "PERIODO", "sortCols": true,
+      "value": "MONTO", "fmt": "money", "totalLabel": "Total" },
+    { "type": "tabla", "title": "Detalle de movimientos", "source": "MOVS",
+      "columns": [
+        { "col": "FECHA", "label": "Fecha", "fmt": "date" },
+        { "col": "CONCEPTO", "label": "Concepto" },
+        { "col": "MONTO", "label": "Monto", "fmt": "money" } ],
+      "totals": ["MONTO"],
+      "breakBy": ["SUCURSAL", "TIPO"],
+      "breakTitle": ["Sucursal: {SUCURSAL}", "{TIPO} ({COUNT} movimientos)"],
+      "breakLabel": ["Total {SUCURSAL}", "Total {TIPO}"],
+      "carry": { "cols": ["MONTO"], "label": "Van", "labelFrom": "Vienen" },
+      "rowStyle": [ { "when": "MONTO < 0", "color": "#A61B1B" } ] }
+  ]
+}

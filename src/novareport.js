@@ -1,5 +1,5 @@
 /*!
- * novaReport 1.22.0 - Reportes PDF / Excel / Word para Oracle APEX
+ * novaReport 1.23.0 - Reportes PDF / Excel / Word para Oracle APEX
  * https://github.com/danielramirezasyn/novareport - Licencia MIT
  * NovaCode - plugin de Acción Dinámica COM.NOVACODE.NOVAREPORT
  *
@@ -10,7 +10,7 @@
 window.novaReport = (function () {
   'use strict';
 
-  var VERSION = '1.22.0';
+  var VERSION = '1.23.0';
 
   /* ------------------------------------------------------------------ librerías */
   var LIBS = {
@@ -31,7 +31,9 @@ window.novaReport = (function () {
     qrcode:        { url: 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js',
                      ok: function () { return typeof window.qrcode === 'function'; } },
     chartjs:       { url: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.js',
-                     ok: function () { return !!(window.Chart && window.Chart.register); } }
+                     ok: function () { return !!(window.Chart && window.Chart.register); } },
+    pdflib:        { url: 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js',
+                     ok: function () { return !!(window.PDFLib && window.PDFLib.PDFDocument); } }
   };
   var NEEDS = { pdf: ['jspdf', 'autotable'], xlsx: ['exceljs'], docx: ['docx'],
                 'docx-template': ['pizzip', 'docxtemplater'], zip: ['jszip'] };
@@ -301,7 +303,7 @@ window.novaReport = (function () {
     }
     if (up === 'NOW') { return now(); }
     if (up === 'TODAY') { return today(); }
-    if (up === 'PAGE' || up === 'PAGES') { return '{' + up + '}'; }
+    if (up === 'PAGE' || up === 'PAGES' || up === 'DOCPAGE' || up === 'DOCPAGES') { return '{' + up + '}'; }
     if (row && Object.prototype.hasOwnProperty.call(row, up)) { return row[up]; }
     if (ctx.doc && Object.prototype.hasOwnProperty.call(ctx.doc, up)) { return ctx.doc[up]; }
     return ctx.params ? ctx.params[up] : undefined;
@@ -347,6 +349,7 @@ window.novaReport = (function () {
     });
   }
   function rowsOf(sec, ctx) {
+    if (sec._rows) { return sec._rows; }
     var rows = ctx.S[String(sec.source || '').toUpperCase()] || [];
     return sec.filter ? rows.filter(function (r) { return cond(sec.filter, ctx, r); }) : rows;
   }
@@ -439,7 +442,7 @@ window.novaReport = (function () {
 
   /* Columnas: definidas o automáticas desde los tipos de la fuente */
   function columnsOf(sec, ctx, rows) {
-    var src = String(sec.source || '').toUpperCase(), types = ctx.T[src] || {};
+    var src = String(sec.source || '').toUpperCase(), types = sec._types || ctx.T[src] || {};
     var cols = sec.columns;
     if (!cols || !cols.length) {
       cols = Object.keys(types).filter(function (c) { return c !== 'DOC_KEY'; }).map(function (c) { return { col: c }; });
@@ -620,29 +623,78 @@ window.novaReport = (function () {
   /* Quiebres: "breakBy" agrupa filas consecutivas con el mismo valor (la consulta debe venir ordenada).
      Devuelve la lista a dibujar: { k: 'head' | 'row' | 'sub', r: fila, rows: filas del grupo, i: n.º de fila de datos } */
   function subCols(sec) { return sec.breakTotals === false ? [] : aggList(Array.isArray(sec.breakTotals) ? sec.breakTotals : sec.totals); }
+  /* 1.23: breakBy acepta una lista de columnas (quiebres anidados). breakTitle / breakLabel pueden ser listas por nivel */
+  function breakCols(sec) {
+    var b = sec.breakBy;
+    if (!b) { return []; }
+    return (Array.isArray(b) ? b : [b]).map(function (x) { return String(x || '').toUpperCase(); }).filter(Boolean);
+  }
+  function lvlOpt(v, l) { return Array.isArray(v) ? v[l] : v; }
   function tableItems(sec, rows) {
-    if (!sec.breakBy || !rows.length) { return rows.map(function (r, i) { return { k: 'row', r: r, i: i }; }); }
-    var bc = String(sec.breakBy).toUpperCase(), out = [], g = null, i = 0, withSub = subCols(sec).length > 0;
-    function close() { if (g && withSub) { out.push({ k: 'sub', r: g.r, rows: g.rows }); } }
-    rows.forEach(function (r) {
-      var key = String(r[bc] === null || r[bc] === undefined ? '' : r[bc]);
-      if (!g || g.key !== key) {
-        close();
-        g = { key: key, r: r, rows: [] };
-        if (sec.breakTitle !== false) { out.push({ k: 'head', r: r, rows: g.rows }); }
+    var bcs = breakCols(sec);
+    if (!bcs.length || !rows.length) { return rows.map(function (r, i) { return { k: 'row', r: r, i: i }; }); }
+    var out = [], open = [], i = 0, withSub = subCols(sec).length > 0;
+    function closeTo(l) {
+      while (open.length > l) {
+        var g = open.pop();
+        if (withSub && lvlOpt(sec.breakLabel, open.length) !== false) { out.push({ k: 'sub', lvl: open.length, col: g.col, r: g.r, rows: g.rows }); }
       }
-      g.rows.push(r);
+    }
+    rows.forEach(function (r) {
+      var keys = bcs.map(function (c) { return String(r[c] === null || r[c] === undefined ? '' : r[c]); }), l = 0;
+      while (l < open.length && open[l].key === keys[l]) { l++; }
+      closeTo(l);
+      for (; l < bcs.length; l++) {
+        var g = { key: keys[l], col: bcs[l], r: r, rows: [] };
+        open.push(g);
+        if (lvlOpt(sec.breakTitle, l) !== false) { out.push({ k: 'head', lvl: l, col: bcs[l], r: r, rows: g.rows }); }
+      }
+      open.forEach(function (x) { x.rows.push(r); });
       out.push({ k: 'row', r: r, i: i++ });
     });
-    close();
+    closeTo(0);
     return out;
+  }
+  /* 1.23: breakPage: cada grupo del primer nivel en su propia página (PDF y Word). Devuelve las partes o null */
+  function breakParts(sec, rows) {
+    var bc = breakCols(sec)[0];
+    if (!sec.breakPage || !bc || sec._part || rows.length < 2) { return null; }
+    var parts = [], key = null;
+    rows.forEach(function (r) {
+      var k = String(r[bc] === null || r[bc] === undefined ? '' : r[bc]);
+      if (!parts.length || k !== key) { parts.push([]); key = k; }
+      parts[parts.length - 1].push(r);
+    });
+    if (parts.length < 2) { return null; }
+    return parts.map(function (pr, i) {
+      var s2 = copyOf(sec), last = i === parts.length - 1;
+      s2._rows = pr; s2._part = true; s2._allRows = rows;
+      if (s2.breakTotals === undefined) { s2.breakTotals = sec.totals; }
+      if (!last) { s2.totals = null; }
+      if (i > 0 && sec.titleOnce) { delete s2.title; }
+      return s2;
+    });
+  }
+  /* 1.23: van / vienen (PDF). carry: true | ["COL"] | { cols, label, labelFrom } */
+  function carryOf(sec) {
+    var c = sec.carry;
+    if (!c) { return null; }
+    var o = c === true ? {} : (Array.isArray(c) ? { cols: c } : c);
+    var cols = aggList(o.cols || sec.totals).filter(function (a) { return a.fn === 'sum'; });
+    return cols.length ? { cols: cols, label: o.label || 'Van', labelFrom: o.labelFrom || 'Vienen' } : null;
+  }
+  /* Relleno del encabezado de grupo: nivel 0 = theme.group; niveles internos, más claro */
+  function groupFill(th, lvl) {
+    if (!lvl) { return th.group; }
+    var c = hexRgb(th.group), t = Math.min(0.75, 0.4 * lvl);
+    return '#' + c.map(function (v) { var x = Math.round(v + (255 - v) * t).toString(16); return x.length < 2 ? '0' + x : x; }).join('').toUpperCase();
   }
   /* Texto de encabezado / subtotal de un grupo: plantilla con la primera fila del grupo y {COUNT} */
   function breakText(sec, it, ctx) {
-    var r = {}, k, bc = String(sec.breakBy).toUpperCase();
+    var r = {}, k, bc = it.col || breakCols(sec)[0];
     for (k in it.r) { r[k] = it.r[k]; }
     r.COUNT = it.rows.length;
-    var t = it.k === 'head' ? sec.breakTitle : sec.breakLabel;
+    var t = lvlOpt(it.k === 'head' ? sec.breakTitle : sec.breakLabel, it.lvl || 0);
     if (t === undefined || t === null || t === true) { t = it.k === 'head' ? '{' + bc + '}' : 'Subtotal {' + bc + '}'; }
     return tpl(t, ctx, r);
   }
@@ -901,22 +953,105 @@ window.novaReport = (function () {
              labelColor: sec.labelColor || '#787878', valueColor: sec.valueColor || th.primary,
              labelSize: sec.labelSize || 7, size: sec.size || 11, cardGap: sec.cardGap !== undefined ? Number(sec.cardGap) : 3 };
   }
+  /* 1.23: encabezado de página. left / center / right: texto o { text, size, bold, color } */
+  function phParts(ph) {
+    var out = {};
+    ['left', 'center', 'right'].forEach(function (k) {
+      var v = ph[k];
+      if (v === undefined || v === null || v === '') { return; }
+      var o = typeof v === 'object' && !Array.isArray(v) ? v : { text: v };
+      var t = Array.isArray(o.text) ? o.text.join('\n') : o.text;
+      if (t === undefined || t === null || t === '') { return; }
+      out[k] = { text: String(t), size: Number(o.size || ph.size) || 8, bold: o.bold !== undefined ? !!o.bold : !!ph.bold,
+                 color: o.color || ph.color || '#000000' };
+    });
+    return out;
+  }
+  function phAlign(ph) { var a = String((ph.image && ph.image.align) || '').toLowerCase(); return a === 'right' || a === 'center' ? a : 'left'; }
+  /* Encabezado de página: si la imagen no trae ancho ni alto, toma el alto de la banda */
+  function phImage(ph, ctx) {
+    if (!ph.image) { return null; }
+    var io = copyOf(ph.image), im = imgOf(io, ctx);
+    if (!im) { return null; }
+    if (!io.width && !io.height) { io.height = Math.max(4, (Number(ph.height) || 12) - 2); }
+    var s = imgSize(io, im);
+    return { im: im, w: s.w, h: s.h };
+  }
+  /* 1.23: tabla cruzada. pivot se convierte en una tabla con una columna por cada valor de "cols" */
+  var PIVOT_FN = { sum: 1, avg: 1, min: 1, max: 1, count: 1 };
+  function pivotCmp(a, b) {
+    var na = Number(a), nb = Number(b);
+    if (a !== '' && b !== '' && !isNaN(na) && !isNaN(nb)) { return na - nb; }
+    return a < b ? -1 : (a > b ? 1 : 0);
+  }
+  function pivotToTable(sec, ctx) {
+    var src = String(sec.source || '').toUpperCase(), rows = rowsOf(sec, ctx), types = ctx.T[src] || {};
+    var dims = (Array.isArray(sec.rows) ? sec.rows : [sec.rows]).filter(Boolean).map(function (x) { return String(x).toUpperCase(); });
+    var pc = String(sec.cols || '').toUpperCase(), vc = String(sec.value || '').toUpperCase(), fn = String(sec.fn || 'sum').toLowerCase();
+    if (!PIVOT_FN[fn]) { fn = 'sum'; }
+    var keys = [], kRow = {}, groups = [], gIdx = {};
+    var val = function (list) { return fn === 'count' && !vc ? list.length : aggValue(list, vc, fn); };
+    rows.forEach(function (r) {
+      var ck = String(r[pc] === null || r[pc] === undefined ? '' : r[pc]);
+      if (!Object.prototype.hasOwnProperty.call(kRow, ck)) { kRow[ck] = r; keys.push(ck); }
+      var gk = dims.map(function (d) { return String(r[d] === null || r[d] === undefined ? '' : r[d]); }).join('\u0001');
+      var g = gIdx[gk];
+      if (!g) { g = gIdx[gk] = { r: r, by: {}, all: [] }; groups.push(g); }
+      (g.by[ck] = g.by[ck] || []).push(r); g.all.push(r);
+    });
+    if (Array.isArray(sec.colOrder)) {
+      var ord = sec.colOrder.map(String).filter(function (k) { return Object.prototype.hasOwnProperty.call(kRow, k); });
+      keys = ord.concat(keys.filter(function (k) { return ord.indexOf(k) < 0; }));
+    } else if (sec.sortCols) { keys.sort(pivotCmp); }
+    if (Number(sec.maxCols) > 0) { keys = keys.slice(0, Number(sec.maxCols)); }
+    var out = copyOf(sec), T = {}, cols = [], tot = sec.rowTotals !== false && keys.length > 1;
+    ['rows', 'cols', 'value', 'fn', 'colOrder', 'sortCols', 'colLabel', 'rowLabels', 'rowTotals', 'colTotals', 'totalLabel', 'empty', 'maxCols', 'filter'].forEach(function (k) { delete out[k]; });
+    out.type = 'tabla';
+    dims.forEach(function (d, i) {
+      T[d] = types[d] || 'VARCHAR2';
+      var rl = (sec.rowLabels || [])[i];
+      cols.push(rl !== undefined ? { col: d, label: rl } : { col: d });
+    });
+    var nfmt = sec.fmt || (fn === 'count' ? 'int' : undefined);
+    keys.forEach(function (k, i) {
+      var n = 'NRP_' + (i + 1);
+      T[n] = 'NUMBER';
+      cols.push({ col: n, label: tpl(sec.colLabel || '{' + pc + '}', ctx, kRow[k]), fmt: nfmt, align: 'right' });
+    });
+    if (tot) { T.NRP_TOTAL = 'NUMBER'; cols.push({ col: 'NRP_TOTAL', label: sec.totalLabel || 'Total', fmt: nfmt, bold: true, align: 'right' }); }
+    out.columns = cols;
+    out._types = T;
+    out._rows = groups.map(function (g) {
+      var o = {};
+      dims.forEach(function (d) { o[d] = g.r[d]; });
+      keys.forEach(function (k, i) { o['NRP_' + (i + 1)] = g.by[k] ? val(g.by[k]) : (sec.empty !== undefined ? sec.empty : null); });
+      if (tot) { o.NRP_TOTAL = val(g.all); }
+      return o;
+    });
+    if (sec.colTotals !== false && !out.totals) {
+      var tf = fn === 'count' ? 'sum' : fn;
+      out.totals = cols.slice(dims.length).map(function (c) { return { col: c.col, fn: tf }; });
+    }
+    if (out.totalsLabel === undefined && sec.totalLabel) { out.totalsLabel = sec.totalLabel; }
+    return out;
+  }
+  function pivots(list, ctx) { return (list || []).map(function (s) { return s && s.type === 'pivot' ? pivotToTable(s, ctx) : s; }); }
   function sectionsFor(layout, format, ctx) {
     var ok = function (s) { return (!s.formats || s.formats.indexOf(format) >= 0) && (!ctx || shown(s, ctx)); };
     var l = (layout.sections || []).filter(ok);
-    return ctx ? splitForms(l).filter(ok) : l;
+    return ctx ? pivots(splitForms(l).filter(ok), ctx) : l;
   }
   /* Columnas: 1 a 3 casillas lado a lado. Dentro solo van secciones que no dependen de la página completa. */
-  var CELL_TYPES = { ficha: 1, formulario: 1, tarjetas: 1, texto: 1, imagen: 1, codigo: 1, alerta: 1, linea: 1, tabla: 1, grafico: 1, espacio: 1,
+  var CELL_TYPES = { ficha: 1, formulario: 1, tarjetas: 1, texto: 1, imagen: 1, codigo: 1, alerta: 1, linea: 1, tabla: 1, grafico: 1, espacio: 1, pivot: 1,
                      columnas: 1, grupo: 1 };   /* 1.19: contenedores anidados */
   /* 1.19: secciones de un grupo, ya filtradas para el formato y el documento */
   var NO_SRC = { linea: 1, espacio: 1, columnas: 1, grupo: 1 };
   function groupSecs(sec, format, ctx) {
     var ok = function (c) { return c && CELL_TYPES[c.type] && (!c.formats || c.formats.indexOf(format) >= 0) && shown(c, ctx); };
-    return splitForms((Array.isArray(sec.sections) ? sec.sections : []).filter(ok).map(function (c) {
+    return pivots(splitForms((Array.isArray(sec.sections) ? sec.sections : []).filter(ok).map(function (c) {
       if (c.source || !sec.source || NO_SRC[c.type]) { return c; }
       var x = copyOf(c); x.source = sec.source; return x;   /* sin fuente: la del grupo */
-    })).filter(ok);
+    })).filter(ok), ctx);
   }
   /* 1.19: contextos de un grupo. Con each + source, uno por fila: la fuente queda con esa fila, sus columnas
      se leen como {COL} y link: { "FUENTE": { "COL_FUENTE": "COL_FILA" } } filtra otras fuentes por la fila */
@@ -966,6 +1101,7 @@ window.novaReport = (function () {
       var secs = splitForms((Array.isArray(list) ? list : []).filter(function (c) { return c && (!c.formats || c.formats.indexOf(format) >= 0); })).filter(function (c) {
         return c && CELL_TYPES[c.type] && (!c.formats || c.formats.indexOf(format) >= 0) && shown(c, ctx);
       }).map(function (c) { return fitCell(c, w); });
+      secs = pivots(secs, ctx);
       var o = { x: x, w: w, secs: secs };
       x += w + cg;
       return o;
@@ -982,7 +1118,62 @@ window.novaReport = (function () {
   }
 
   /* ================================================================== imágenes */
-  var IMG = {}, CW = {};
+  var IMG = {}, CW = {}, PDFS = {};
+  /* 1.23: PDFs para anexar (append) desde URL: se descargan antes de armar el documento */
+  function preloadPdfs(layout, format) {
+    if (!Array.isArray(layout.append) || (format !== 'pdf' && format !== 'all')) { return Promise.resolve(); }
+    return Promise.all(layout.append.filter(function (a) { return a && a.url; }).map(function (a) {
+      var url = imgUrl(a.url);
+      if (PDFS[url]) { return null; }
+      return fetch(url, { credentials: 'same-origin' }).then(function (r) {
+        if (!r.ok) { throw new Error('No se pudo cargar el PDF ' + url + ' (' + r.status + ')'); }
+        return r.arrayBuffer();
+      }).then(function (b) { PDFS[url] = b; });
+    }));
+  }
+  /* Anexos de cada documento: [{ after: última página del documento, items: [ArrayBuffer] }] */
+  function pdfAppends(layout, ranges) {
+    var list = Array.isArray(layout.append) ? layout.append : [];
+    if (!list.length) { return []; }
+    return ranges.map(function (rg) {
+      var items = [];
+      list.forEach(function (a) {
+        if (!a || !cond(a.when, rg.ctx, null)) { return; }
+        if (a.url) { var b = PDFS[imgUrl(a.url)]; if (b) { items.push(b); } return; }
+        if (!a.field) { return; }
+        var rows = a.source ? rowsOf(a, rg.ctx) : [rg.ctx.doc || {}], fld = String(a.field).toUpperCase();
+        rows.forEach(function (r) {
+          var v = r && r[fld];
+          if (v) { items.push(b64ToBuf(String(v).replace(/^data:[^,]*,/, '').replace(/\s+/g, ''))); }
+        });
+      });
+      return { after: rg.to, items: items };
+    }).filter(function (g) { return g.items.length; });
+  }
+  function appendPdfs(buf, groups) {
+    var L = window.PDFLib, off = 0;
+    return L.PDFDocument.load(buf).then(function (base) {
+      var p = Promise.resolve();
+      groups.forEach(function (g) {
+        g.items.forEach(function (bytes) {
+          p = p.then(function () { return L.PDFDocument.load(bytes, { ignoreEncryption: true }); })
+            .then(function (src) { return base.copyPages(src, src.getPageIndices()); })
+            .then(function (pages) { pages.forEach(function (pg) { base.insertPage(g.after + off, pg); off++; }); })
+            .catch(function (e) { throw new Error('No se pudo anexar el PDF: ' + (e && e.message || e)); });
+        });
+      });
+      return p.then(function () { return base.save(); });
+    }).then(function (u8) { return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength); });
+  }
+  /* 1.23: protección del PDF. layout.pdf: { password, ownerPassword, permissions }; opt.pdfPassword la reemplaza */
+  var PDF_PERMS = { print: 1, modify: 1, copy: 1, 'annot-forms': 1 };
+  function pdfSecurity(layout, ctx, opt) {
+    var ps = layout.pdf || {}, pw = opt && opt.pdfPassword !== undefined && opt.pdfPassword !== null && opt.pdfPassword !== '' ? String(opt.pdfPassword) : (ps.password ? tpl(ps.password, ctx) : '');
+    var own = ps.ownerPassword ? tpl(ps.ownerPassword, ctx) : '';
+    if (!pw && !own) { return null; }
+    var perms = (Array.isArray(ps.permissions) ? ps.permissions : ['print']).filter(function (x) { return PDF_PERMS[x]; });
+    return { userPassword: pw, ownerPassword: own || pw, userPermissions: perms };
+  }
   function imgUrl(u) {
     var env = (window.apex && apex.env) || {};
     return String(u || '').replace('#APP_FILES#', env.APP_FILES || '').replace('#APP_IMAGES#', env.APP_FILES || '')
@@ -1022,6 +1213,8 @@ window.novaReport = (function () {
     }
     scan(layout.sections);
     if (layout.batch && layout.batch.summary) { scan(layout.batch.summary.sections); if (layout.batch.summary.layout) { scan(layout.batch.summary.layout.sections); } }
+    var phi = layout.pageHeader && layout.pageHeader.image;
+    if (phi && phi.url && !phi.field) { out.push(phi.url); }
     return out;
   }
   function preloadImages(layout) {
@@ -1360,13 +1553,22 @@ window.novaReport = (function () {
     Object.defineProperty(root, 'NeedAppearances', { enumerable: true, configurable: false, value: 'true' });
     root.__nr = true;
   }
-  function renderPdf(layout, ctxs, hooks) {
+  function renderPdf(layout, ctxs, hooks, opt) {
     var page = layout.page || {}, th = themeOf(layout), sz = th.fontSize;
-    var doc = new window.jspdf.jsPDF({ orientation: page.orientation || 'portrait', unit: 'mm', format: page.size || 'letter', compress: !layoutHasForm(layout) });
+    var sec0 = pdfSecurity(layout, ctxs[0] || { S: {}, T: {} }, opt);
+    if (sec0 && Array.isArray(layout.append) && layout.append.length) { return Promise.reject(new Error('No se puede anexar PDFs a un PDF con contraseña.')); }
+    var dopt = { orientation: page.orientation || 'portrait', unit: 'mm', format: page.size || 'letter', compress: !layoutHasForm(layout) };
+    if (sec0) { dopt.encryption = sec0; }
+    var doc = new window.jspdf.jsPDF(dopt);
     var W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = page.margin || 8;
     var P = hexRgb(th.primary), HT = hexRgb(th.headText), Z = hexRgb(th.zebra), TT = hexRgb(th.totals);
     var y = M, firstDoc = true;
     var XL = M, XR = M;   /* marco horizontal: margen izquierdo y derecho (las columnas lo achican) */
+    /* 1.23: encabezado de página. Banda de PHh mm desde PHy; el contenido de cada página empieza en TOP */
+    var PH = layout.pageHeader && typeof layout.pageHeader === 'object' ? layout.pageHeader : null;
+    var PHy = PH ? (PH.top !== undefined ? Number(PH.top) : Math.min(M, 5)) : 0, PHh = PH ? (Number(PH.height) || 12) : 0;
+    var TOP = PH ? PHy + PHh + (PH.gap !== undefined ? Number(PH.gap) : 3) : M;
+    function mg() { var o = { left: XL, right: XR }; if (PH) { o.top = TOP; } return o; }
 
     function last() { return doc.lastAutoTable ? doc.lastAutoTable.finalY : y; }
     function gap(n) { y = last() + (n || 2); }
@@ -1375,7 +1577,7 @@ window.novaReport = (function () {
       var x = sec.x !== undefined ? sec.x : (sec.align === 'right' ? W - XR - w : (sec.align === 'center' ? XL + (W - XL - XR - w) / 2 : XL));
       if (sec.y !== undefined) { draw(x, sec.y); return; }
       y = Math.max(y, last());
-      if (y + h > H - M - 10) { doc.addPage(); y = M; }
+      if (y + h > H - M - 10) { doc.addPage(); y = TOP; }
       draw(x, y);
       y += h + (sec.gap !== undefined ? sec.gap : 3); doc.lastAutoTable = { finalY: y };
     }
@@ -1389,13 +1591,16 @@ window.novaReport = (function () {
       doc.lastAutoTable = null;
       var rg = { ctx: ctx, from: doc.internal.getNumberOfPages() };
       ranges.push(rg);
+      if (PH && PH.firstPage !== false) { y = TOP; }
       sectionsFor(layout, 'pdf', ctx).forEach(function drawSec(sec) {
         var t = sec.type;
         if (t === 'header') {
           var hd = headerOf(sec, th), hF = sec.fill ? hexRgb(hd.fill) : P, hC = sec.color ? hexRgb(hd.color) : HT;
           var htb = Math.max(10.5, 3.5 + hd.size * 0.3528), hsb = htb + Math.max(6, 1.5 + hd.subSize * 0.3528 * 1.1);
           var hh = Math.max(Number(sec.height) || 0, sec.subtitle ? Math.max(20, hsb + 3.5) : Math.max(16, htb + 5.5));
-          doc.setFillColor(hF[0], hF[1], hF[2]); doc.rect(0, 0, W, hh, 'F');
+          var h0 = PH && (PH.firstPage !== false || doc.internal.getCurrentPageInfo().pageNumber > rg.from) ? TOP - 2 : 0;
+          htb += h0; hsb += h0;
+          doc.setFillColor(hF[0], hF[1], hF[2]); doc.rect(0, h0, W, hh, 'F');
           doc.setTextColor(hC[0], hC[1], hC[2]);
           doc.setFont(hd.font[0], 'bold'); doc.setFontSize(hd.size);
           doc.text(tpl(sec.title, ctx), M, htb, { maxWidth: W * 0.7 });
@@ -1404,7 +1609,7 @@ window.novaReport = (function () {
           if (sec.subtitle) { doc.setFontSize(hd.subSize); doc.text(tpl(sec.subtitle, ctx), M, hsb); }
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(0, 0, 0);
-          y = hh + 4; doc.lastAutoTable = null;
+          y = h0 + hh + 4; doc.lastAutoTable = null;
           return;
         }
         if (t === 'texto') {
@@ -1449,7 +1654,7 @@ window.novaReport = (function () {
             lines.push({ ws: cur, w: cw, last: true });
             if (!para.trim()) { y += lh; return; }
             lines.forEach(function (ln) {
-              if (!absT && y + lh > H - M - 10) { doc.addPage(); y = M; }
+              if (!absT && y + lh > H - M - 10) { doc.addPage(); y = TOP; }
               var gaps = ln.ws.filter(function (w) { return w.sp; }).length;
               var extra = (al === 'justify' && !ln.last && gaps) ? (maxW - ln.w) / gaps : 0;
               var x = al === 'right' ? x0 + maxW - ln.w : (al === 'center' ? x0 + (maxW - ln.w) / 2 : x0);
@@ -1519,7 +1724,7 @@ window.novaReport = (function () {
           });
           return;
         }
-        if (t === 'salto') { doc.addPage(); y = M; doc.lastAutoTable = { finalY: M }; return; }
+        if (t === 'salto') { doc.addPage(); y = TOP; doc.lastAutoTable = { finalY: TOP }; return; }
         if (t === 'columnas') {
           var fx = XL, fr0 = XR, cs = cellsOf(sec, 'pdf', ctx, W - XL - XR);
           if (!cs.length) { return; }
@@ -1539,7 +1744,7 @@ window.novaReport = (function () {
             cs.forEach(function (c) { c.secs.forEach(drawSec); });
             return;
           }
-          if (y + hMax > H - M - 10) { doc.addPage(); y = M; }
+          if (y + hMax > H - M - 10) { doc.addPage(); y = TOP; }
           var y0 = y, yEnd = y;
           cs.forEach(function (c) {
             frame(c); y = y0; doc.lastAutoTable = { finalY: y0 };
@@ -1555,7 +1760,7 @@ window.novaReport = (function () {
           var gCtx0 = ctx, gSuf0 = suffix, gx0 = XL, gr0 = XR;
           var gPad = sec.padding !== undefined ? Number(sec.padding) : (sec.border || sec.fill ? 3 : 0);
           var gTitle = function (text) {
-            doc.autoTable({ startY: Math.max(y, last()), theme: 'plain', margin: { left: XL, right: XR }, body: [[text]],
+            doc.autoTable({ startY: Math.max(y, last()), theme: 'plain', margin: mg(), body: [[text]],
                             styles: { fontSize: sec.titleSize || sz + 2, fontStyle: 'bold', cellPadding: 1.6,
                                       fillColor: hexRgb(sec.titleFill || th.primary), textColor: hexRgb(sec.titleColor || th.headText) } });
             y = last();
@@ -1582,7 +1787,7 @@ window.novaReport = (function () {
             y = M; doc.lastAutoTable = null;
             var gh = gDraw(inner), gfit = doc.internal.getNumberOfPages() === 1;
             doc = real; y = ys; doc.lastAutoTable = { finalY: ys };
-            if (gfit && sec.keepTogether !== false && y + gh > H - M - 10) { doc.addPage(); y = M; doc.lastAutoTable = { finalY: y }; }
+            if (gfit && sec.keepTogether !== false && y + gh > H - M - 10) { doc.addPage(); y = TOP; doc.lastAutoTable = { finalY: y }; }
             var gy0 = y, gp0 = doc.internal.getCurrentPageInfo().pageNumber, gw = W - gx0 - gr0;
             if (gfit && sec.fill) { var gf = hexRgb(sec.fill); doc.setFillColor(gf[0], gf[1], gf[2]); doc.rect(gx0, gy0, gw, gh, 'F'); }
             var gh2 = gDraw(inner);
@@ -1646,7 +1851,7 @@ window.novaReport = (function () {
           }
           var fst = { fontSize: sec.size || 8.5, cellPadding: 0.9 };
           if (sec.grid) { fst.cellPadding = 1.6; fst.valign = 'middle'; fst.lineWidth = 0.15; fst.lineColor = hexRgb(sec.borderColor || GRID_LINE); }
-          var fto = { startY: y, body: body, theme: 'plain', margin: { left: XL, right: XR }, styles: fst, columnStyles: cs };
+          var fto = { startY: y, body: body, theme: 'plain', margin: mg(), styles: fst, columnStyles: cs };
           if (stk) {
             var fsz0 = fst.fontSize, fpd = fst.cellPadding;
             fto.didParseCell = function (d) {
@@ -1682,7 +1887,7 @@ window.novaReport = (function () {
             var klines = krow.map(function (it) { return doc.splitTextToSize(String(it.value), ktw); });
             var kmax = Math.max.apply(null, klines.map(function (l) { return Math.max(1, l.length); }));
             var kbody = kl * 1.2 + 1.5 + kv * 1.2 * kmax, kh = Math.max(sec.height || 0, 3 + kbody + 3);
-            if (y + kh > H - M - 10) { doc.addPage(); y = M; }
+            if (y + kh > H - M - 10) { doc.addPage(); y = TOP; }
             krow.forEach(function (it, j) {
               var kx = XL + j * (kw + kd.cardGap), lc2 = hexRgb(kd.labelColor), vc2 = hexRgb(it.color || kd.valueColor);
               doc.setFillColor(kf[0], kf[1], kf[2]); doc.rect(kx, y, kw, kh, 'F');
@@ -1726,7 +1931,7 @@ window.novaReport = (function () {
           var fvw2 = hasSlots(sec.fields) || anyStacked(sec) ? Math.max(10, (W - XL - XR - (sec.labelWidth || 32) * nf) / nf) : 0;
           for (var fi = 0; fi < nf * 2; fi += 2) { fcs[fi] = { fontStyle: 'bold', cellWidth: sec.labelWidth || 32 }; if (fvw2) { fcs[fi + 1] = { cellWidth: fvw2 }; } }
           var lineH = 0.3528 * fsz * 1.3;
-          doc.autoTable({ startY: y, body: fbody, theme: 'plain', margin: { left: XL, right: XR }, rowPageBreak: 'avoid',
+          doc.autoTable({ startY: y, body: fbody, theme: 'plain', margin: mg(), rowPageBreak: 'avoid',
             styles: { fontSize: fsz, cellPadding: 1.2, valign: 'middle' }, columnStyles: fcs,
             didParseCell: function (d) {
               var f = d.section === 'body' && fpos[d.row.index + ':' + d.column.index];
@@ -1750,7 +1955,7 @@ window.novaReport = (function () {
         }
         if (t === 'alerta') {
           rowsOf(sec, ctx).filter(function (r) { return cond(sec.when, ctx, r); }).slice(0, sec.each ? 999 : 1).forEach(function (r) {
-            doc.autoTable({ startY: y, theme: 'plain', margin: { left: XL, right: XR }, body: [[tpl(sec.text, ctx, r)]],
+            doc.autoTable({ startY: y, theme: 'plain', margin: mg(), body: [[tpl(sec.text, ctx, r)]],
                             styles: { fontSize: sec.size || 8, fontStyle: 'bold', cellPadding: 1.4,
                                       fillColor: hexRgb(colorOf(sec.color, ctx, r) || '#E6ECF2') } });
             gap(1);
@@ -1760,6 +1965,14 @@ window.novaReport = (function () {
         if (t === 'tabla') {
           var rows = rowsOf(sec, ctx);
           if (!rows.length && sec.hideEmpty !== false && !sec.emptyText) { return; }
+          var bparts = breakParts(sec, rows);
+          if (bparts) {
+            bparts.forEach(function (s2, bi) {
+              if (bi) { doc.addPage(); y = TOP; doc.lastAutoTable = { finalY: TOP }; }
+              drawSec(s2);
+            });
+            return;
+          }
           var cols = columnsOf(sec, ctx, rows), head = [], colSt = {};
           if (sec.title) { head.push([{ content: tpl(sec.title, ctx), colSpan: cols.length, styles: { halign: 'left', fontSize: sz + 1 } }]); }
           if (sec.groups) {
@@ -1785,7 +1998,7 @@ window.novaReport = (function () {
           var body = rows.length ? [] : [[{ content: tpl(sec.emptyText, ctx), colSpan: cols.length, styles: { halign: 'left', fontStyle: 'italic' } }]];
           if (rows.length) {
             items.forEach(function (it) {   /* bodyIt: ítem de cada fila del cuerpo (un subtotal puede ocupar 2 filas) */
-              if (it.k === 'head') { body.push([{ content: breakText(sec, it, ctx), colSpan: cols.length, styles: { halign: 'left', fontStyle: 'bold', fillColor: GR } }]); bodyIt.push(it); bodyIm.push(null); bodyLk.push(null); return; }
+              if (it.k === 'head') { body.push([{ content: breakText(sec, it, ctx), colSpan: cols.length, styles: { halign: 'left', fontStyle: 'bold', fillColor: it.lvl ? hexRgb(groupFill(th, it.lvl)) : GR } }]); bodyIt.push(it); bodyIm.push(null); bodyLk.push(null); return; }
               if (it.k === 'sub') { pdfAgg(aggRow(cols, sset, it.rows, breakText(sec, it, ctx)), cols.length).forEach(function (rw) { body.push(rw); bodyIt.push(it); bodyIm.push(null); bodyLk.push(null); }); return; }
               var rim = null, rlk = null;
               cols.forEach(function (c, ci) { var u = hrefOf(c, ctx, it.r); if (u) { (rlk = rlk || {})[ci] = u; } });
@@ -1801,14 +2014,23 @@ window.novaReport = (function () {
           }
           var foot = null, tlist = aggList(sec.totals);
           if (tlist.length && rows.length) {
-            foot = pdfAgg(aggRow(cols, tlist, rows, totText(sec, ctx, rows)), cols.length);
+            var frows = sec._allRows || rows;
+            foot = pdfAgg(aggRow(cols, tlist, frows, totText(sec, ctx, frows)), cols.length);
+          }
+          /* Van / vienen: filas de datos dibujadas por página; el renglón se agrega después de la tabla */
+          var cy = rows.length ? carryOf(sec) : null, cyH = (sec.size || sz) * 0.3528 + 2.4, cyDone = {}, cyRows = [], cyPg = [];
+          var cyM = mg();
+          if (cy) {
+            cyM.top = (cyM.top !== undefined ? cyM.top : 40 / doc.internal.scaleFactor) + cyH;
+            cyM.bottom = 40 / doc.internal.scaleFactor + cyH;
           }
           var tst = { fontSize: sec.size || sz, cellPadding: sec.grid ? 1.2 : 0.8 }, tva = tableVAlign(sec, cols);
           if (tva) { tst.valign = tva; }
           cols.forEach(function (c, i) { if (c.valign) { colSt[i].valign = c.valign; } });
           if (sec.grid) { tst.lineWidth = 0.15; tst.lineColor = hexRgb(sec.borderColor || GRID_LINE); }
           doc.autoTable({
-            startY: y, margin: { left: XL, right: XR }, head: head, body: body, foot: foot || undefined,
+            startY: y, margin: cyM, head: head, body: body, foot: foot || undefined, rowPageBreak: cy ? 'avoid' : undefined,
+            didDrawPage: cy ? function (h) { cyPg.push({ page: h.pageNumber, y: h.cursor.y, n: cyRows.length }); } : undefined,
             showHead: sec.repeatHeader === false ? 'firstPage' : 'everyPage', showFoot: 'lastPage',
             styles: tst,
             headStyles: { fillColor: P, textColor: HT, halign: 'center', fontSize: sec.size || sz },
@@ -1841,6 +2063,10 @@ window.novaReport = (function () {
             },
             didDrawCell: function (h) {
               if (h.section !== 'body') { return; }
+              if (cy && !cyDone[h.row.index]) {
+                cyDone[h.row.index] = 1;
+                if (bodyIt[h.row.index] && bodyIt[h.row.index].k === 'row') { cyRows.push(bodyIt[h.row.index].r); }
+              }
               var cim = bodyIm[h.row.index] && bodyIm[h.row.index][h.column.index];
               pdfCellLink(doc, h.cell, bodyLk[h.row.index] && bodyLk[h.row.index][h.column.index], !cols[h.column.index].cell);
               if (!cim) { return; }
@@ -1850,6 +2076,28 @@ window.novaReport = (function () {
               doc.addImage(cim.im.data, cim.im.ext === 'jpg' ? 'JPEG' : 'PNG', x, iy, cim.w, cim.h, undefined, 'FAST');
             }
           });
+          if (cy && cyPg.length > 1) {
+            var cyT = doc.lastAutoTable, cyEnd = doc.internal.getCurrentPageInfo().pageNumber, cyX = cyT.settings.margin.left;
+            var cyW = cyT.columns.map(function (c) { return c.width; }), cyTW = cyW.reduce(function (a, b) { return a + b; }, 0);
+            var cyFs = sec.size || sz, cyTC = sec.totalsColor ? hexRgb(sec.totalsColor) : [0, 0, 0];
+            var cyDraw = function (pg, yy, text, rws) {
+              doc.setPage(pg);
+              doc.setFillColor(TT[0], TT[1], TT[2]); doc.rect(cyX, yy, cyTW, cyH, 'F');
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(cyFs); doc.setTextColor(cyTC[0], cyTC[1], cyTC[2]);
+              var by = yy + cyH / 2 + cyFs * 0.3528 * 0.35, cx = cyX;
+              doc.text(tpl(text, ctx, { COUNT: rws.length }), cyX + 1, by);
+              cols.forEach(function (c, ci) {
+                if (c.col && aggFind(cy.cols, c.col)) { doc.text(fmt(aggValue(rws, c.col, 'sum'), c.fmt || 'money'), cx + cyW[ci] - 1, by, { align: 'right' }); }
+                cx += cyW[ci];
+              });
+            };
+            for (var cpi = 0; cpi < cyPg.length - 1; cpi++) {
+              var cpr = cyRows.slice(0, cyPg[cpi].n);
+              cyDraw(cyPg[cpi].page, cyPg[cpi].y, cy.label, cpr);
+              cyDraw(cyPg[cpi + 1].page, cyM.top - cyH, cy.labelFrom, cpr);
+            }
+            doc.setPage(cyEnd); doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0);
+          }
           gap(sec.gap || 3);
         }
       });
@@ -1876,12 +2124,49 @@ window.novaReport = (function () {
     });
 
     var ft = layout.footer, n = doc.internal.getNumberOfPages(), c0 = ctxs[0] || { S: {}, T: {} };
+    /* {DOCPAGE} / {DOCPAGES}: página y total del documento (en un archivo unido, cada documento cuenta desde 1) */
+    var docPg = function (s, p) {
+      var g = ranges.filter(function (x) { return p >= x.from && p <= x.to; })[0] || { from: 1, to: n };
+      return String(s).replace(/\{DOCPAGES\}/g, g.to - g.from + 1).replace(/\{DOCPAGE\}/g, p - g.from + 1);
+    };
+    if (PH) {
+      var pps = phParts(PH), pLine = PH.line !== false;
+      ranges.forEach(function (g) {
+        var pim = phImage(PH, g.ctx);
+        for (var pg = g.from; pg <= g.to; pg++) {
+          if (PH.firstPage === false && pg === g.from) { continue; }
+          doc.setPage(pg);
+          if (PH.fill) { var pf = hexRgb(PH.fill); doc.setFillColor(pf[0], pf[1], pf[2]); doc.rect(0, PHy, W, PHh, 'F'); }
+          var px = M, prx = W - M, pA = pim ? phAlign(PH) : '';
+          if (pim) {
+            doc.addImage(pim.im.data, pim.im.ext === 'jpg' ? 'JPEG' : 'PNG', pA === 'right' ? W - M - pim.w : (pA === 'center' ? (W - pim.w) / 2 : M), PHy + (PHh - pim.h) / 2, pim.w, pim.h);
+            if (pA === 'right') { prx = W - M - pim.w - 3; } else if (pA === 'left') { px = M + pim.w + 3; }
+          }
+          ['left', 'center', 'right'].forEach(function (k) {
+            var pt = pps[k];
+            if (!pt || (k === 'center' && pA === 'center')) { return; }   /* imagen al centro: ocupa el lugar del texto central */
+            var txt = docPg(tpl(pt.text, g.ctx).replace(/\{PAGES\}/g, n).replace(/\{PAGE\}/g, pg), pg).split('\n');
+            var lh = pt.size * 0.3528 * 1.2, by = PHy + (PHh - lh * txt.length) / 2 + pt.size * 0.3528 * 0.9, pc = hexRgb(pt.color);
+            doc.setFont('helvetica', pt.bold ? 'bold' : 'normal'); doc.setFontSize(pt.size); doc.setTextColor(pc[0], pc[1], pc[2]);
+            txt.forEach(function (ln, li) {
+              doc.text(ln, k === 'left' ? px : (k === 'center' ? W / 2 : prx), by + li * lh, { align: k });
+            });
+          });
+          if (pLine) {
+            var pl = hexRgb(PH.lineColor || th.primary);
+            doc.setDrawColor(pl[0], pl[1], pl[2]); doc.setLineWidth(PH.lineWidth || 0.3);
+            doc.line(M, PHy + PHh, W - M, PHy + PHh);
+          }
+        }
+      });
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0); doc.setDrawColor(0, 0, 0);
+    }
     if (ft) {
       for (var p = 1; p <= n; p++) {
         doc.setPage(p);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(ft.size || 7);
         var mu = hexRgb(th.muted); doc.setTextColor(mu[0], mu[1], mu[2]);
-        var rep = function (s) { return tpl(s, c0).replace('{PAGE}', p).replace('{PAGES}', n); };
+        var rep = function (s) { return docPg(tpl(s, c0).replace('{PAGE}', p).replace('{PAGES}', n), p); };
         if (ft.left) { var fl = doc.splitTextToSize(rep(ft.left), W * 0.78); doc.text(fl, M, H - 4 - (fl.length - 1) * (ft.size || 7) * 0.4); }
         if (ft.right) { doc.text(rep(ft.right), W - M, H - 5, { align: 'right' }); }
       }
@@ -1889,6 +2174,11 @@ window.novaReport = (function () {
     }
     if (layout.title) { doc.setProperties({ title: tpl(layout.title, c0) }); }
     pdfFormFix(doc);
+    var apx = pdfAppends(layout, ranges);
+    if (apx.length) {
+      if (!window.PDFLib || !window.PDFLib.PDFDocument) { return Promise.reject(new Error('No se pudo cargar la librería: pdf-lib')); }
+      return appendPdfs(doc.output('arraybuffer'), apx);
+    }
     return Promise.resolve(doc.output('arraybuffer'));
   }
 
@@ -1971,7 +2261,7 @@ window.novaReport = (function () {
         var list = sd.sections ? sd.sections.map(function (id) {
           return typeof id === 'number' ? secs[id] : secs.filter(function (s) { return s.id === id; })[0];
         }).filter(Boolean) : secs;
-        list = splitForms(list.filter(function (s) { return shown(s, ctx); })).filter(function (s) { return (!s.formats || s.formats.indexOf('xlsx') >= 0) && shown(s, ctx); });
+        list = pivots(splitForms(list.filter(function (s) { return shown(s, ctx); })).filter(function (s) { return (!s.formats || s.formats.indexOf('xlsx') >= 0) && shown(s, ctx); }), ctx);
         var maxC = 4, r = 1, widths = {}, tables = 0, freezeAt = null, filterRef = null, hasFields = false;
         /* Columnas de hoja que necesita cada casilla de una sección columnas */
         var need = function (secs) {
@@ -2261,7 +2551,7 @@ window.novaReport = (function () {
               cellAt(r, 1).value = tpl(sec.emptyText, ctx); cellAt(r, 1).font = { italic: true };
               r += 2; return;
             }
-            var first = r, items = tableItems(sec, rows), sset = subCols(sec), gStart = null;
+            var first = r, items = tableItems(sec, rows), sset = subCols(sec), gStart = [], nLv = Math.max(1, breakCols(sec).length), xBp = false;
             /* Fila de totales/subtotal con fórmulas; devuelve la siguiente fila libre */
             var xlsAgg = function (r0, list, grows, text, r1, r2, sub) {
               var ar = aggRow(cols, list, grows, text), mixed = aggMixed(list);
@@ -2287,16 +2577,17 @@ window.novaReport = (function () {
             };
             items.forEach(function (it) {
               if (it.k === 'head') {
+                if (sec.breakPage && !it.lvl) { if (xBp) { ws.getRow(r - 1).addPageBreak(); } xBp = true; }
                 merge(r, 1, r, cols.length);
                 var hx = cellAt(r, 1);
-                hx.value = breakText(sec, it, ctx); hx.font = { bold: true }; hx.fill = fill(th.group);
+                hx.value = breakText(sec, it, ctx); hx.font = { bold: true }; hx.fill = fill(groupFill(th, it.lvl));
                 r++; return;
               }
               if (it.k === 'sub') {
-                r = xlsAgg(r, sset, it.rows, breakText(sec, it, ctx), gStart, r - 1, true);
-                gStart = null; return;
+                r = xlsAgg(r, sset, it.rows, breakText(sec, it, ctx), gStart[it.lvl || 0], r - 1, true);
+                gStart[it.lvl || 0] = null; return;
               }
-              if (gStart === null) { gStart = r; }
+              for (var gl = 0; gl < nLv; gl++) { if (gStart[gl] === null || gStart[gl] === undefined) { gStart[gl] = r; } }
               var row = it.r, ri = it.i, xva = tableVAlign(sec, cols);
               var rs = styleOf(sec.rowStyle, ctx, row);
               cols.forEach(function (c, i) {
@@ -2319,7 +2610,7 @@ window.novaReport = (function () {
                 if (c.isNum && isNum(raw)) {
                   cell.value = raw;
                   cell.numFmt = xlNumFmt(c.fmt);
-                } else if ((c.fmt === 'date' || (ctx.T[String(sec.source).toUpperCase()] || {})[c.col] === 'DATE') && parseDate(raw)) {
+                } else if ((c.fmt === 'date' || (sec._types || ctx.T[String(sec.source).toUpperCase()] || {})[c.col] === 'DATE') && parseDate(raw)) {
                   cell.value = parseDate(raw); cell.numFmt = 'dd/mm/yyyy';
                 } else {
                   cell.value = raw === null || raw === undefined ? null : (textFmt(c.fmt) && !c.map ? fmt(raw, c.fmt) : String(raw));
@@ -2363,6 +2654,21 @@ window.novaReport = (function () {
         if (layout.footer) {
           ws.headerFooter.oddFooter = '&L&8' + tpl(layout.footer.left, ctx).replace(/&/g, '&&').substr(0, 200) + '&R&8Página &P de &N';
         }
+        /* 1.23: encabezado de página como encabezado de impresión (&L &C &R); {PAGE} = &P, {PAGES} = &N */
+        if (layout.pageHeader && typeof layout.pageHeader === 'object') {
+          var xph = phParts(layout.pageHeader), xhs = '';
+          [['left', '&L'], ['center', '&C'], ['right', '&R']].forEach(function (kk) {
+            var pt = xph[kk[0]];
+            if (!pt) { return; }
+            var tx = tpl(pt.text, ctx).replace(/&/g, '&&').replace(/\{(DOC)?PAGES\}/g, '&N').replace(/\{(DOC)?PAGE\}/g, '&P').substr(0, 80);
+            xhs += kk[1] + '&' + Math.round(pt.size) + (pt.color && pt.color !== '#000000' ? '&K' + hexNo(pt.color) : '') + (pt.bold ? '&B' + tx + '&B' : tx);
+          });
+          if (xhs) { ws.headerFooter.oddHeader = xhs; }
+          if (layout.pageHeader.firstPage === false) {
+            ws.headerFooter.differentFirst = true;
+            if (ws.headerFooter.oddFooter) { ws.headerFooter.firstFooter = ws.headerFooter.oddFooter; }
+          }
+        }
       });
     });
     if (layoutHasForm(layout)) { xlsxQuoteNames(wb); }
@@ -2372,16 +2678,24 @@ window.novaReport = (function () {
   /* ================================================================== WORD (docx) */
   var PAGES_TW = { letter: [12240, 15840], legal: [12240, 20160], a4: [11906, 16838] };
   /* Pie de página Word: solo si el diseño trae "footer"; {PAGE} y {PAGES} se vuelven campos de Word */
+  /* Texto con {PAGE} {PAGES} {DOCPAGE} {DOCPAGES} como campos de Word ({DOCPAGES} = páginas de la sección) */
+  var DOCX_PG = { '{PAGE}': 'CURRENT', '{PAGES}': 'TOTAL_PAGES', '{DOCPAGE}': 'CURRENT', '{DOCPAGES}': 'TOTAL_PAGES_IN_SECTION' };
+  function docxRuns(txt, ctx, o) {
+    var D = window.docx, r = [];
+    tpl(txt, ctx).split(/(\{(?:DOC)?PAGES?\})/).forEach(function (x) {
+      if (DOCX_PG[x]) { r.push(new D.TextRun({ children: [D.PageNumber[DOCX_PG[x]]], size: o.size, color: o.color, bold: o.bold || undefined })); }
+      else if (x) { r.push(new D.TextRun({ text: x, size: o.size, color: o.color, bold: o.bold || undefined })); }
+    });
+    return r;
+  }
+  function usesDocPage(layout) {
+    var s = JSON.stringify([layout.footer || null, layout.pageHeader || null]);
+    return /\{DOCPAGES?\}/.test(s);
+  }
   function docxFooter(ft, ctx, th) {
     var D = window.docx, out = [], sz = Math.round((ft.size || 7) * 2), col = hexNo(th.muted);
     function runs(txt) {
-      var parts = tpl(txt, ctx).split(/(\{PAGES?\})/), r = [];
-      parts.forEach(function (x) {
-        if (x === '{PAGE}') { r.push(new D.TextRun({ children: [D.PageNumber.CURRENT], size: sz, color: col })); }
-        else if (x === '{PAGES}') { r.push(new D.TextRun({ children: [D.PageNumber.TOTAL_PAGES], size: sz, color: col })); }
-        else if (x) { r.push(new D.TextRun({ text: x, size: sz, color: col })); }
-      });
-      return r;
+      return docxRuns(txt, ctx, { size: sz, color: col });
     }
     if (ft.left) { out.push(new D.Paragraph({ children: runs(ft.left) })); }
     if (ft.right) { out.push(new D.Paragraph({ alignment: D.AlignmentType.RIGHT, children: runs(ft.right) })); }
@@ -2498,14 +2812,52 @@ window.novaReport = (function () {
     }
     var pgW = (land ? dims[1] : dims[0]) / 56.7, pgH = (land ? dims[0] : dims[1]) / 56.7;
     function wmHeader(ctx) {
+      var p = wmPara(ctx);
+      return p ? new D.Header({ children: [p] }) : null;
+    }
+    /* 1.23: encabezado de página: tabla sin bordes (imagen | izquierda | centro | derecha) con línea inferior */
+    function phHeader(ph, ctx) {
+      var pp = phParts(ph), pim = phImage(ph, ctx), cellsW = [], kidsP = [];
+      var nb = { style: D.BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+      var ln = ph.line !== false ? { style: D.BorderStyle.SINGLE, size: Math.max(2, Math.round((ph.lineWidth || 0.3) * 20)), color: hexNo(ph.lineColor || th.primary) } : nb;
+      var shade = ph.fill ? { type: D.ShadingType.CLEAR, color: 'auto', fill: hexNo(ph.fill) } : undefined;
+      var mk = function (children, wd) {
+        cellsW.push(wd);
+        return new D.TableCell({ children: children, width: { size: wd, type: D.WidthType.DXA }, verticalAlign: D.VerticalAlign.CENTER,
+                                 margins: { top: 0, bottom: 0, left: 0, right: 0 }, shading: shade });
+      };
+      var txtCell = function (k, al, wd) {
+        var pt = pp[k];
+        var paras = (pt ? pt.text.split('\n') : ['']).map(function (ln0) {
+          return new D.Paragraph({ alignment: al, spacing: { before: 0, after: 0 },
+                                   children: pt ? docxRuns(ln0, ctx, { size: Math.round(pt.size * 2), color: hexNo(pt.color), bold: pt.bold }) : [] });
+        });
+        return mk(paras, wd);
+      };
+      var pA = pim ? phAlign(ph) : '', iw = pim && pA !== 'center' ? Math.round(pim.w * 56.7) + 170 : 0, rest = usable - iw, pR = pA === 'right';
+      var imgCell = function (wd) {
+        return mk([new D.Paragraph({ spacing: { before: 0, after: 0 }, alignment: pR ? D.AlignmentType.RIGHT : (pA === 'center' ? D.AlignmentType.CENTER : D.AlignmentType.LEFT),
+          children: [new D.ImageRun({ type: pim.im.ext === 'jpg' ? 'jpg' : 'png', data: pim.im.buf,
+          transformation: { width: Math.round(pim.w * 3.78), height: Math.round(pim.h * 3.78) } })] })], wd);
+      };
+      if (pim && pA === 'left') { kidsP.push(imgCell(iw)); }
+      var wl = Math.floor(rest * 0.4), wc = Math.floor(rest * 0.3), wr = rest - wl - wc;
+      if (pA === 'center') { wc = Math.max(wc, Math.round(pim.w * 56.7) + 170); wl = Math.floor((rest - wc) / 2); wr = rest - wc - wl; }
+      kidsP.push(txtCell('left', D.AlignmentType.LEFT, wl), pA === 'center' ? imgCell(wc) : txtCell('center', D.AlignmentType.CENTER, wc), txtCell('right', D.AlignmentType.RIGHT, wr));
+      if (pim && pR) { kidsP.push(imgCell(iw)); }
+      return new D.Table({ rows: [new D.TableRow({ height: { value: Math.round((Number(ph.height) || 12) * 56.7), rule: D.HeightRule.ATLEAST }, children: kidsP })],
+                           width: { size: usable, type: D.WidthType.DXA }, columnWidths: cellsW, layout: D.TableLayoutType.FIXED,
+                           borders: { top: nb, left: nb, right: nb, insideHorizontal: nb, insideVertical: nb, bottom: ln } });
+    }
+    function wmPara(ctx) {
       var wm = watermarkOf(layout, ctx), im;
       if (!wm) { return null; }
       try { im = watermarkPng(wm, pgW, pgH); } catch (e) { return null; }  /* sin canvas (fuera del navegador) */
-      return new D.Header({ children: [new D.Paragraph({ children: [new D.ImageRun({
+      return new D.Paragraph({ children: [new D.ImageRun({
         type: 'png', data: im.buf, transformation: { width: Math.round(pgW * 3.78), height: Math.round(pgH * 3.78) },
         floating: { horizontalPosition: { relative: D.HorizontalPositionRelativeFrom.PAGE, align: D.HorizontalPositionAlign.CENTER },
                     verticalPosition: { relative: D.VerticalPositionRelativeFrom.PAGE, align: D.VerticalPositionAlign.CENTER },
-                    behindDocument: true, allowOverlap: true, wrap: { type: D.TextWrappingType.NONE } } })] })] });
+                    behindDocument: true, allowOverlap: true, wrap: { type: D.TextWrappingType.NONE } } })] });
     }
 
     var sections = ctxs.map(function (ctx, di) {
@@ -2747,6 +3099,14 @@ window.novaReport = (function () {
         } else if (t === 'tabla') {
           var rows = rowsOf(sec, ctx);
           if (!rows.length && sec.hideEmpty !== false && !sec.emptyText) { return; }
+          var wparts = breakParts(sec, rows);
+          if (wparts) {
+            wparts.forEach(function (s2, bi) {
+              if (bi) { kids.push(new D.Paragraph({ children: [new D.PageBreak()] })); }
+              drawSec(s2);
+            });
+            return;
+          }
           var cols = columnsOf(sec, ctx, rows), trs2 = [];
           if (sec.title) {
             trs2.push(new D.TableRow({ tableHeader: true, children: [cell(tpl(sec.title, ctx), { bold: true, color: th.headText, fill: th.primary, span: cols.length, size: szT + 2 })] }));
@@ -2770,7 +3130,7 @@ window.novaReport = (function () {
           };
           tableItems(sec, rows).forEach(function (it) {
             if (it.k === 'head') {
-              trs2.push(new D.TableRow({ cantSplit: true, children: [cell(breakText(sec, it, ctx), { bold: true, fill: th.group, span: cols.length })] }));
+              trs2.push(new D.TableRow({ cantSplit: true, children: [cell(breakText(sec, it, ctx), { bold: true, fill: groupFill(th, it.lvl), span: cols.length })] }));
               return;
             }
             if (it.k === 'sub') {
@@ -2799,7 +3159,8 @@ window.novaReport = (function () {
             }) }));
           });
           if (aggList(sec.totals).length && rows.length) {
-            wordAgg(aggRow(cols, aggList(sec.totals), rows, totText(sec, ctx, rows))).forEach(function (tr) { trs2.push(tr); });
+            var wfr = sec._allRows || rows;
+            wordAgg(aggRow(cols, aggList(sec.totals), wfr, totText(sec, ctx, wfr))).forEach(function (tr) { trs2.push(tr); });
           }
           var wts = cols.map(function (c, ci) { return c.width ? c.width / 20 : (wImW[ci] ? Math.max(1, (wImW[ci] + 4) / 20) : 1); }), tw = wts.reduce(function (a, b) { return a + b; }, 0);
           var cws = wts.map(function (x) { return Math.floor(usable * x / tw); });
@@ -2807,12 +3168,24 @@ window.novaReport = (function () {
                                   borders: sec.grid === false ? noB : gridOf(sec.grid ? (sec.borderColor || GRID_LINE) : null) }), spacer());
         }
       });
-      var ft = layout.footer, wh = wmHeader(ctx);
+      var ft = layout.footer, wh = wmHeader(ctx), ph = layout.pageHeader && typeof layout.pageHeader === 'object' ? layout.pageHeader : null;
+      var props = { page: { size: { width: dims[0], height: dims[1], orientation: land ? D.PageOrientation.LANDSCAPE : D.PageOrientation.PORTRAIT },
+                            margin: { top: mg, bottom: mg, left: mg, right: mg } } };
+      var hdrs = wh ? { default: wh } : undefined, ftrs = ft ? { default: new D.Footer({ children: docxFooter(ft, ctx, th) }) } : undefined;
+      if (ph) {   /* 1.23: encabezado de página (con la marca de agua, si hay) */
+        var wp = wmPara(ctx);
+        hdrs = { default: new D.Header({ children: (wp ? [wp] : []).concat([phHeader(ph, ctx), new D.Paragraph({ spacing: { before: 0, after: 0 }, children: [] })]) }) };
+        if (ph.firstPage === false) {
+          props.titlePage = true;
+          hdrs.first = wmHeader(ctx) || new D.Header({ children: [new D.Paragraph({ children: [] })] });
+          if (ft) { ftrs.first = new D.Footer({ children: docxFooter(ft, ctx, th) }); }
+        }
+      }
+      if (ctxs.length > 1 && usesDocPage(layout)) { props.page.pageNumbers = { start: 1 }; }
       return {
-        headers: wh ? { default: wh } : undefined,
-        properties: { page: { size: { width: dims[0], height: dims[1], orientation: land ? D.PageOrientation.LANDSCAPE : D.PageOrientation.PORTRAIT },
-                              margin: { top: mg, bottom: mg, left: mg, right: mg } } },
-        footers: ft ? { default: new D.Footer({ children: docxFooter(ft, ctx, th) }) } : undefined,
+        headers: hdrs,
+        properties: props,
+        footers: ftrs,
         children: kids.length ? kids : [para('')]
       };
     });
@@ -2987,7 +3360,7 @@ window.novaReport = (function () {
     return safeName(n) + '.' + ext;
   }
   function renderOne(f, layout, ctxs, opt) {
-    if (f === 'pdf') { return renderPdf(layout, ctxs, opt.hooks); }
+    if (f === 'pdf') { return renderPdf(layout, ctxs, opt.hooks, opt); }
     if (f === 'xlsx') { return renderXlsx(layout, ctxs, ctxs.length > 1, opt); }
     if (f === 'docx') { return renderDocx(layout, ctxs, opt); }
     if (f === 'docx-template') {
@@ -3001,7 +3374,7 @@ window.novaReport = (function () {
     var lay = parseLayout(opt.layout), o2 = {}, k;
     for (k in opt) { o2[k] = opt[k]; }
     o2.layout = lay;
-    return preloadImages(lay).then(function () { return buildCore(o2, data); });
+    return Promise.all([preloadImages(lay), preloadPdfs(lay, opt.format || 'pdf')]).then(function () { return buildCore(o2, data); });
   }
   function buildCore(opt, data) {
     var layout = parseLayout(opt.layout), formats = opt.format === 'all' ? ['pdf', 'xlsx', 'docx'] : [opt.format || 'pdf'];
@@ -3096,6 +3469,7 @@ window.novaReport = (function () {
     scan(layout.sections);
     var sm = layout.batch && layout.batch.summary;
     if (sm) { scan(sm.sections); if (sm.layout) { scan(sm.layout.sections); } }
+    if (Array.isArray(layout.append) && layout.append.length) { l.push('pdflib'); }   /* 1.23: anexar PDFs */
     return l;
   }
   /* "@NOMBRE" se reemplaza por layout.defs.NOMBRE (reutilizar columnas, estilos, secciones) */
@@ -3154,7 +3528,7 @@ window.novaReport = (function () {
       try { layout = parseLayout(o.layout); } catch (e) { if (sp) { sp.remove(); } if (w) { w.close(); } alertMsg('Diseño inválido: ' + e.message); return Promise.reject(e); }
     }
     var opt = { layout: layout, format: o.format, output: o.output, params: o.params || {}, templateUrl: o.templateUrl, hooks: o.hooks || {},
-                formPassword: o.formPassword };
+                formPassword: o.formPassword, pdfPassword: o.pdfPassword };
     fire('start', { format: o.format, output: o.output, report: resolver ? o.report : undefined });
     var needZip = o.output !== 'merge';
     var libs = ensure(libsFor(formats, needZip).concat(resolver || query ? [] : layoutLibs(layout)));

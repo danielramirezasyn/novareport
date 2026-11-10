@@ -304,6 +304,7 @@ novaReport.run({
 | `loader` | boolean | `true` | Pantalla de espera en pestaña nueva (solo PDF de un documento con `open`). |
 | `hooks` | object | `{}` | Hoy existe `pdfCell` (ver abajo). |
 | `formPassword` | string | — | Contraseña de la protección de las secciones `formulario` (Word y Excel). Tiene prioridad sobre `form.password` del diseño. |
+| `pdfPassword` | string | — | Contraseña para abrir el PDF. Tiene prioridad sobre `pdf.password` del diseño ([DISENO.md](DISENO.md#pdf-con-contraseña)). |
 | `save` | object | — | Guardar en el servidor: `{ process, mode }`. Tiene prioridad sobre `save` del diseño. Ver [DISENO.md](DISENO.md#guardar-en-el-servidor). |
 | `transform` | function | — | Recibe los datos crudos del servidor ([§10](#10-protocolo-ajax)) y puede devolver otros. |
 | `data` | object | — | Datos en el formato del [§10](#10-protocolo-ajax). Si se pasa, no se llama al servidor. |
@@ -362,6 +363,7 @@ novaReport.libs.jszip.url         = '#APP_FILES#lib/jszip.min.js';
 novaReport.libs.docx.url          = '#APP_FILES#lib/docx.iife.js';
 novaReport.libs.pizzip.url        = '#APP_FILES#lib/pizzip.min.js';
 novaReport.libs.docxtemplater.url = '#APP_FILES#lib/docxtemplater.min.js';
+novaReport.libs.pdflib.url        = '#APP_FILES#lib/pdf-lib.min.js';
 ```
 
 En estas rutas sí se resuelven `#APP_FILES#`, `#WORKSPACE_FILES#` e `#IMAGE_PREFIX#`. Las versiones esperadas están en [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
@@ -373,7 +375,7 @@ En estas rutas sí se resuelven `#APP_FILES#`, `#WORKSPACE_FILES#` e `#IMAGE_PRE
 | `docx` | `docx` |
 | `docx-template` | `pizzip`, `docxtemplater` |
 | ZIP | `jszip` (se carga salvo en `merge`; también para secciones `formulario` en Word) |
-| Diseño | `qrcode` (sección `codigo` QR) y `chartjs` (sección `grafico`), solo si el diseño los usa |
+| Diseño | `qrcode` (sección `codigo` QR), `chartjs` (sección `grafico`) y `pdflib` (`append`), solo si el diseño los usa |
 
 ## 8. Código de inicialización
 
@@ -461,6 +463,9 @@ El prefijo `ORA-nnnnn:` del primer error se elimina antes de mostrarlo.
 | `No se pudo descargar la plantilla (404)` | URL de plantilla incorrecta. |
 | `Formato no soportado: X` | Valor de `format` / `data-format` inválido. |
 | `Error de comunicación: …` | Falla HTTP del AJAX (sesión expirada, error 500). |
+| `No se pudo cargar el PDF URL (404)` | PDF de `append` con `url` incorrecta. |
+| `No se pudo anexar el PDF: …` | Un PDF de `append` está dañado o no es PDF. |
+| `No se puede anexar PDFs a un PDF con contraseña.` | `pdf.password` (o `pdfPassword`) junto con `append`. |
 | `Configure la consulta del reporte (origen Consulta).` | Origen `query` con el atributo vacío. |
 | `La consulta del reporte no devolvió filas.` / `…devolvió más de una fila.` | La consulta del reporte debe devolver exactamente una fila. |
 | `La consulta del reporte debe devolver las columnas LAYOUT y/o SOURCES.` | Faltan los alias reconocidos. |

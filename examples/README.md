@@ -23,6 +23,7 @@ Todos se pueden generar sin APEX con `cd test && npm install && npm test` (ver [
 | 08 | [Factura con columnas](#08--factura-con-columnas) | PDF / Excel / Word · Archivo | `columnas`, `fmt: letras`, `when` en una sección |
 | 09 | [Cover Sheet de crédito](#09--cover-sheet-de-crédito) | PDF / Excel / Word · Archivo | `tarjetas`, `ficha` con `grid`, `tabla` con `headAlign` / `grid` / `totalsColor` |
 | 12 | [Hipervínculos](#12--hipervínculos) | PDF / Excel / Word · Archivo | `[a=URL]` en `texto`, `href` en columnas, ficha, imagen y QR de celda |
+| 13 | [Estado de cuenta](#13--estado-de-cuenta) | PDF / Excel / Word · Archivo | `pageHeader`, `pivot`, `breakBy` con dos niveles, `carry` (Van / Vienen) |
 
 ---
 
@@ -280,5 +281,23 @@ Vínculos web, de correo, de teléfono y a páginas de la aplicación (versión 
 | Vínculo por fila en la tabla | `"href": "{SITIO}"` en la columna; la fila sin sitio queda sin vínculo |
 | QR cliqueable en la celda | `"cell": { "type": "codigo", …, "href": "{SITIO}" }` |
 | Logo cliqueable | `{ "type": "imagen", …, "href": "https://{WEB}" }` |
+
+**Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**.
+
+## 13 · Estado de cuenta
+
+[`13-estado-cuenta`](13-estado-cuenta)
+
+Estado de cuenta con 240 movimientos de demostración (versión 1.23.0). Usa solo `DUAL`; cargue `logo.png` en *Static Application Files*.
+
+| Qué | Cómo |
+|---|---|
+| Encabezado en cada página | `pageHeader` con `image`, `left` en dos líneas, `center` con `{DOC.CLIENTE}` y `right` con `Página {DOCPAGE} de {DOCPAGES}` |
+| Resumen por sucursal y mes | `{ "type": "pivot", "rows": "SUCURSAL", "cols": "PERIODO", "sortCols": true, "value": "MONTO" }` |
+| Quiebres anidados | `"breakBy": ["SUCURSAL", "TIPO"]` con `breakTitle` y `breakLabel` por nivel; la consulta viene ordenada por las dos columnas |
+| Van / Vienen | `"carry": { "cols": ["MONTO"] }` (solo PDF) |
+| Débitos en rojo | `"rowStyle": [ { "when": "MONTO < 0", "color": "#A61B1B" } ]` |
+
+Variantes: agregue `"breakPage": true` a la tabla para empezar cada sucursal en una página nueva, o `"pdf": { "password": "{DOC.RUC}" }` al diseño para proteger el PDF.
 
 **Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**.
