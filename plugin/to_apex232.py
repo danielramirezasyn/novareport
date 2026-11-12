@@ -39,7 +39,7 @@ sub1(r"\n,p_apexlang_name=>'[^']*'", "")
 sub1(r"\n,p_static_id=>'[^']*'", "")
 # secuencia de cada atributo (static_id del export 26.1)
 SEQ = {'sources': 1, 'layout': 2, 'format': 3, 'output': 4, 'items': 5, 'pdf_action': 6, 'report_query': 11,
-       'template_url': 7, 'message': 8, 'origin': 9, 'resolver': 10}
+       'template_url': 7, 'message': 8, 'origin': 9, 'resolver': 10, 'language': 12}
 # render v1
 RENDER = """'function render(p_dynamic_action in apex_plugin.t_dynamic_action,',
 '                p_plugin         in apex_plugin.t_plugin)',
@@ -60,6 +60,7 @@ unistr('    -- APEX 23.2 (API v1): configuraci\\00F3n en this.action.attributeNN
 '    l_r.attribute_07 := p_dynamic_action.attribute_08;  -- message',
 '    l_r.javascript_function := ''function(){novaReport.da.call(this,{origin:''',
 '        || apex_javascript.add_value(nvl(p_dynamic_action.attribute_09, ''attributes''), false)',
+'        || '',lang:'' || apex_javascript.add_value(nvl(p_dynamic_action.attribute_12, ''auto''), false)',
 '        || case when l_init is not null then '',init:'' || l_init end',
 '        || ''});}'';',
 '    return l_r;',

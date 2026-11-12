@@ -1,5 +1,25 @@
 -- novaReport: código PL/SQL del plugin (render + ajax)
 c_max_rows constant pls_integer := 250000;
+-- 1.24: idioma de los mensajes del servidor ('es' | 'en'); lo fija ajax
+g_nr_lang varchar2(2) := 'en';
+
+function nr_t(p_es in varchar2, p_en in varchar2) return varchar2 is
+begin
+    return case when g_nr_lang = 'es' then p_es else p_en end;
+end nr_t;
+
+-- Idioma: el que resolvió el navegador (x04) > atributo Language > idioma de la sesión; español -> 'es', el resto -> 'en'
+function nr_lang(p_attr in varchar2) return varchar2 is
+    l_x varchar2(10) := lower(substr(apex_application.g_x04, 1, 2));
+    l_a varchar2(10) := lower(substr(p_attr, 1, 2));
+begin
+    if l_x in ('es', 'en') then
+        return l_x;
+    elsif l_a in ('es', 'en') then
+        return l_a;
+    end if;
+    return case when lower(nvl(apex_util.get_session_lang, apex_application.g_browser_language)) like 'es%' then 'es' else 'en' end;
+end nr_lang;
 
 function nr_is_item(p_name in varchar2) return boolean is
     l_n pls_integer;
@@ -25,15 +45,15 @@ function nr_resolve(p_fn in varchar2, p_id in varchar2, p_params in clob) return
     l_res clob;
 begin
     if l_fn is null or not regexp_like(l_fn, '^[A-Za-z][A-Za-z0-9_$#]*(\.[A-Za-z][A-Za-z0-9_$#]*){0,2}$') then
-        raise_application_error(-20003, 'Configure la función resolver del plugin (p. ej. nrd_catalogo_pkg.resolver).');
+        raise_application_error(-20003, nr_t('Configure la función resolver del plugin (p. ej. nrd_catalogo_pkg.resolver).', 'Configure the plugin resolver function (e.g. nrd_catalogo_pkg.resolver).'));
     end if;
     if trim(p_id) is null then
-        raise_application_error(-20004, 'Indique el reporte a generar (data-report).');
+        raise_application_error(-20004, nr_t('Indique el reporte a generar (data-report).', 'Specify the report to generate (data-report).'));
     end if;
     execute immediate 'begin :r := ' || dbms_assert.qualified_sql_name(l_fn) || '(p_id => :i, p_params => :p); end;'
         using out l_res, in trim(p_id), in p_params;
     if l_res is null then
-        raise_application_error(-20005, 'La función resolver no devolvió el reporte.');
+        raise_application_error(-20005, nr_t('La función resolver no devolvió el reporte.', 'The resolver function did not return the report.'));
     end if;
     return json_object_t.parse(l_res);
 end nr_resolve;
@@ -63,7 +83,7 @@ procedure nr_query(p_sql in varchar2, p_params in clob,
     end val;
 begin
     if l_sql is null then
-        raise_application_error(-20007, 'Configure la consulta del reporte (origen Consulta).');
+        raise_application_error(-20007, nr_t('Configure la consulta del reporte (origen Consulta).', 'Configure the report query (Query origin).'));
     end if;
     if p_params is not null then
         apex_json.parse(l_vals, p_params);
@@ -87,7 +107,7 @@ begin
                  p_auto_bind_items => true);
     while apex_exec.next_row(l_ctx) loop
         if l_found then
-            raise_application_error(-20008, 'La consulta del reporte devolvió más de una fila.');
+            raise_application_error(-20008, nr_t('La consulta del reporte devolvió más de una fila.', 'The report query returned more than one row.'));
         end if;
         l_found := true;
         for c in 1 .. apex_exec.get_column_count(l_ctx) loop
@@ -104,17 +124,17 @@ begin
     apex_exec.close(l_ctx);
     l_ctx := null;
     if not l_found then
-        raise_application_error(-20009, 'La consulta del reporte no devolvió filas.');
+        raise_application_error(-20009, nr_t('La consulta del reporte no devolvió filas.', 'The report query returned no rows.'));
     end if;
     if not l_known then
-        raise_application_error(-20010, 'La consulta del reporte debe devolver las columnas LAYOUT y/o SOURCES.');
+        raise_application_error(-20010, nr_t('La consulta del reporte debe devolver las columnas LAYOUT y/o SOURCES.', 'The report query must return the LAYOUT and/or SOURCES columns.'));
     end if;
     if p_layout is not null and dbms_lob.getlength(p_layout) > 0 then
         begin
             l_chk := json_object_t.parse(p_layout);
         exception
             when others then
-                raise_application_error(-20011, 'La columna LAYOUT no es un JSON válido: ' || regexp_replace(sqlerrm, '^ORA-\d+: ', ''));
+                raise_application_error(-20011, nr_t('La columna LAYOUT no es un JSON válido: ', 'The LAYOUT column is not valid JSON: ') || regexp_replace(sqlerrm, '^ORA-\d+: ', ''));
         end;
     end if;
 exception
@@ -166,7 +186,7 @@ begin
         end if;
     end loop;
     if l_n = 0 then
-        raise_application_error(-20001, 'Defina al menos una fuente con una línea "--@NOMBRE" antes del SELECT.');
+        raise_application_error(-20001, nr_t('Defina al menos una fuente con una línea "--@NOMBRE" antes del SELECT.', 'Define at least one source with a "--@NAME" line before the SELECT.'));
     end if;
 
     apex_json.open_object;
@@ -235,7 +255,7 @@ begin
         while apex_exec.next_row(l_ctx) loop
             l_rows := l_rows + 1;
             if l_rows > c_max_rows then
-                raise_application_error(-20002, 'El reporte supera el máximo de ' || c_max_rows || ' filas.');
+                raise_application_error(-20002, nr_t('El reporte supera el máximo de ' || c_max_rows || ' filas.', 'The report exceeds the maximum of ' || c_max_rows || ' rows.'));
             end if;
             apex_json.open_array;
             for c in 1 .. l_cols loop
@@ -268,7 +288,7 @@ begin
         -- Diseño y parámetros (para {PARAM.X}); las fuentes SQL nunca viajan al navegador
         l_el := p_res.get('layout');
         if l_el is null then
-            raise_application_error(-20006, 'La función resolver no devolvió el diseño.');
+            raise_application_error(-20006, nr_t('La función resolver no devolvió el diseño.', 'The resolver function did not return the layout.'));
         end if;
         apex_json.write('layout', case when l_el.is_object then treat(l_el as json_object_t).to_clob else p_res.get_clob('layout') end);
         if p_res.has('templateUrl') then
@@ -318,6 +338,7 @@ begin
     l_r.function_param.put('templateUrl', p_dynamic_action.attributes.get_varchar2('template_url'));
     l_r.function_param.put('message',     p_dynamic_action.attributes.get_varchar2('message'));
     l_r.function_param.put('origin',      nvl(p_dynamic_action.attributes.get_varchar2('origin'), 'attributes'));
+    l_r.function_param.put('lang',        nvl(p_dynamic_action.attributes.get_varchar2('language'), 'auto'));
     if l_init is not null then
         l_r.function_param.put_function(p_key => 'init', p_code => l_init, p_type => apex_javascript.c_type_function);
     end if;
@@ -335,6 +356,7 @@ function ajax(p_dynamic_action in apex_plugin.t_dynamic_action,
     l_src clob;
     l_tpl varchar2(4000);
 begin
+    g_nr_lang := nr_lang(p_dynamic_action.attributes.get_varchar2('language'));
     begin
         if nvl(p_dynamic_action.attributes.get_varchar2('origin'), 'attributes') = 'resolver' then
             -- Nunca se acepta SQL ni diseño del navegador: solo ID (x03) + parámetros (x01)

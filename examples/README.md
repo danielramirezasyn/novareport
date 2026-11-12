@@ -301,3 +301,16 @@ Estado de cuenta con 240 movimientos de demostración (versión 1.23.0). Usa sol
 Variantes: agregue `"breakPage": true` a la tabla para empezar cada sucursal en una página nueva, o `"pdf": { "password": "{DOC.RUC}" }` al diseño para proteger el PDF.
 
 **Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**.
+
+## 14 · Factura en inglés (`14-english-invoice`)
+
+El mismo motor con textos en inglés (1.24): `"lang": "en"` pone `Totals`, `Yes / No` y los mensajes en inglés aunque la sesión esté en español; `"locale": "en-US"` muestra las fechas como `11/12/2026`; las secciones usan los alias `table`, `details`, `text` y `alert`, y el monto en letras sale con `words:DOLLAR/DOLLARS`.
+
+| Qué muestra | Dónde |
+|---|---|
+| Idioma del reporte | `"lang": "en"` |
+| Fecha `mm/dd/yyyy` | `"locale": "en-US"` |
+| Secciones con alias en inglés | `"type": "table"`, `"details"`, `"text"`, `"alert"` |
+| Monto en letras en inglés | `{DOC.TOTAL|words:DOLLAR/DOLLARS}` |
+
+**Configuración:** Formato **PDF**, **Excel** o **Word** · Salida **Archivo**. Las fuentes solo usan `DUAL`.

@@ -14,10 +14,11 @@ let CANVAS = false;
 try { const { createCanvas } = require('canvas'); document.createElement = t => t === 'canvas' ? createCanvas(1, 1) : null; CANVAS = true; }
 catch (e) { console.warn('Paquete "canvas" no disponible: se omiten los ejemplos con gráficos.'); }
 const fs = require('fs'), path = require('path');
-const EX = path.join(__dirname, '..', 'examples'), OUT = path.join(__dirname, 'out');
+const EX = path.join(__dirname, '..', 'examples'), OUT = process.env.NR_OUT || path.join(__dirname, 'out');
 const logo = fs.readFileSync(path.join(EX, '03-constancia-posicion-fija', 'logo.png'));
 /* #APP_FILES# se resuelve a un data URL para no depender de APEX */
-window.apex = { item: () => ({ getValue: () => '' }), env: { APP_FILES: 'data:image/png;base64,' } };
+/* 1.24: las pruebas corren como una sesión de APEX en español (salidas idénticas a 1.23) */
+window.apex = { item: () => ({ getValue: () => '' }), env: { APP_FILES: 'data:image/png;base64,' }, locale: { getLanguage: () => process.env.NR_LANG || 'es' } };
 /* Regresión: ninguna tabla PDF puede quedar con alto 0 */
 const _at = window.jspdf.jsPDF.API.autoTable;
 window.jspdf.jsPDF.API.autoTable = function (o) {
@@ -116,6 +117,12 @@ data['08-factura-columnas'] = {
   data['13-estado-cuenta'] = {
     DOCS: { cols: [U('DOC_KEY'), N('CLIENTE'), N('RUC'), N('CUENTA')], rows: [[1, 'NOVACODE, S.A.', '155771259-2-2025', 'CTA-000123']] },
     MOVS: { cols: [U('DOC_KEY'), N('SUCURSAL'), N('TIPO'), { name: 'FECHA', type: 'DATE' }, N('PERIODO'), N('CONCEPTO'), U('MONTO')], rows } }; }
+/* 14: factura en inglés (1.24): lang, locale, alias de secciones y words; los mismos datos que fuentes.sql */
+data['14-english-invoice'] = {
+  DOCS: { cols: [U('DOC_KEY'), N('INVOICE_NO'), { name: 'INVOICE_DATE', type: 'DATE' }, N('CUSTOMER'), N('TAX_ID'), N('PAID'), U('TOTAL')],
+    rows: [[1, 'INV-000123', '12/11/2026', 'Acme Corp.', '12-3456789', 'Y', 1284]] },
+  ITEMS: { cols: [U('DOC_KEY'), N('DESCRIPTION'), U('QTY'), U('PRICE'), U('AMOUNT')],
+    rows: [[1, 'Oracle APEX consulting', 8, 120, 960], [1, 'novaReport support (annual)', 1, 324, 324]] } };
 const runs = [['01-listado-empleados', 'pdf', 'file'], ['01-listado-empleados', 'xlsx', 'file'], ['01-listado-empleados', 'docx', 'file'],
   ['02-cartas-zip', 'pdf', 'zip'], ['02-cartas-zip', 'pdf', 'merge'], ['03-constancia-posicion-fija', 'pdf', 'file'],
   ['04-imagen-blob', 'pdf', 'zip'], ['04-imagen-blob', 'docx', 'zip'],
@@ -610,5 +617,116 @@ fs.mkdirSync(OUT, { recursive: true });
       if (!/contraseña/.test(err || '')) { throw new Error('pdf anexos + contraseña debe fallar'); }
       console.log('OK  ', 'anexos-123__pdf__' + r.name);
     } else { console.log('OMITIDO anexos-123 (sin pdf-lib)'); }
+    /* 1.24: idioma (lang / sesión), locale, alias en inglés de las secciones, words y tamaños de página */
+    {
+      const I = window.novaReport._internals, eq = (a, b, m) => { if (a !== b) { throw new Error('1.24 ' + m + ': "' + a + '" != "' + b + '"'); } };
+      const d124 = { EMP: { cols: [N('ENAME'), U('SAL'), { name: 'HIREDATE', type: 'DATE' }, N('ACTIVO')],
+        rows: EMP.slice(0, 5).map(e => [e[1], e[4] + 0.5, e[3], 'Y']) } };
+      const mk = extra => Object.assign({ fileName: 'idioma-124', footer: { left: 'novaReport' }, sections: [
+        { type: 'header', title: 'Language / Idioma' },
+        { type: 'table', source: 'EMP', columns: ['ENAME', 'SAL', 'HIREDATE', { col: 'ACTIVO', fmt: 'yn' }],
+          totals: [{ col: 'SAL', fn: 'avg' }, { col: 'HIREDATE', fn: 'min' }], breakBy: 'ACTIVO' },
+        { type: 'details', fields: [{ label: 'Total', value: '{EMP.SAL}', fmt: 'money' }] },
+        { type: 'text', text: '{EMP.SAL|words:DOLLAR/DOLLARS}' }] }, extra);
+      const cells = async buf => {
+        const wb = new window.ExcelJS.Workbook(); await wb.xlsx.load(buf); const v = [], nf = []; let foot = '', paper = 0;
+        wb.eachSheet(ws => { foot = (ws.headerFooter && ws.headerFooter.oddFooter) || ''; paper = ws.pageSetup.paperSize;
+          ws.eachRow(r => r.eachCell(c => { v.push(String(c.value && c.value.richText ? c.value.richText.map(x => x.text).join('') : c.value)); nf.push(String(c.numFmt)); })); });
+        return { v, nf, foot, paper };
+      };
+      /* lang: "en" en el diseño gana a la sesión (las pruebas corren en español) */
+      for (const format of ['pdf', 'xlsx', 'docx']) {
+        const { r, buf } = await B(mk({ lang: 'en' }), format, 'file', d124); save('idioma-124__en__' + format + '__' + r.name, buf);
+        if (format === 'xlsx') {
+          const c = await cells(buf);
+          if (!c.v.some(x => /^Totals/.test(x)) || !c.v.includes('Yes') || !c.v.some(x => /^Subtotal Y/.test(x))) { throw new Error('1.24 xlsx en: textos ' + c.v.join('|')); }
+          if (!/Page &P of &N$/.test(c.foot)) { throw new Error('1.24 xlsx en: pie ' + c.foot); }
+          if (!c.nf.some(x => /^"Avg\. "/.test(x)) || !c.nf.some(x => /^"Min\. "dd\/mm\/yyyy/.test(x))) { throw new Error('1.24 xlsx en: agregados ' + c.nf.join('|')); }
+          if (!c.v.some(x => /^FIVE THOUSAND DOLLARS AND 50\/100$/.test(x))) { throw new Error('1.24 xlsx en: words'); }
+        }
+        if (format === 'docx') {
+          const x = await xmlOf(buf, 'word/document.xml');
+          if (!/Totals/.test(x) || !/>Yes</.test(x) || /Totales/.test(x)) { throw new Error('1.24 docx en: textos'); }
+        }
+        console.log('OK  ', 'idioma-124__en__' + format + '__' + r.name);
+      }
+      eq(window.novaReport.lang(), 'en', 'lang()');
+      /* sin lang: sesión en español -> igual que 1.23 */
+      { const { buf } = await B(mk({}), 'xlsx', 'file', d124), c = await cells(buf);
+        if (!c.v.some(x => /^Totales/.test(x)) || !c.v.includes('Sí') || !/Página &P de &N$/.test(c.foot) || !c.nf.some(x => /^"Prom\. "/.test(x))) { throw new Error('1.24 xlsx es: ' + c.v.join('|')); }
+        eq(window.novaReport.lang(), 'es', 'lang() sesión'); }
+      /* opción lang (atributo Language del plugin) y sesión en otro idioma -> inglés */
+      { const r = await window.novaReport.build({ layout: mk({}), format: 'xlsx', output: 'file', lang: 'en', zipType: 'nodebuffer' }, d124);
+        const c = await cells(Buffer.from(r.data));
+        if (!c.v.some(x => /^Totals/.test(x))) { throw new Error('1.24 opción lang'); }
+        process.env.NR_LANG = 'pt-br';
+        const r2 = await window.novaReport.build({ layout: mk({}), format: 'xlsx', output: 'file', zipType: 'nodebuffer' }, d124);
+        const c2 = await cells(Buffer.from(r2.data));
+        delete process.env.NR_LANG;
+        if (!c2.v.some(x => /^Totals/.test(x))) { throw new Error('1.24 sesión pt-br debe salir en inglés'); }
+        eq(r2.name, 'idioma-124.xlsx', 'nombre');
+        const r3 = await window.novaReport.build({ layout: { lang: 'en', sections: [{ type: 'table', source: 'EMP' }] }, format: 'xlsx', output: 'file', zipType: 'nodebuffer' }, d124);
+        eq(r3.name, 'report.xlsx', 'nombre por defecto en');
+        const r4 = await window.novaReport.build({ layout: { sections: [{ type: 'tabla', source: 'EMP' }] }, format: 'xlsx', output: 'file', zipType: 'nodebuffer' }, d124);
+        eq(r4.name, 'reporte.xlsx', 'nombre por defecto es'); }
+      /* mensajes de error en el idioma activo */
+      { let e1 = null, e2 = null;
+        try { await B({ lang: 'en', sections: [{ type: 'table', source: 'EMP' }] }, 'pdf', 'file', { DOCS: { cols: [U('DOC_KEY')], rows: [] } }); } catch (e) { e1 = e.message; }
+        try { await B({ sections: [{ type: 'tabla', source: 'EMP' }] }, 'pdf', 'file', { DOCS: { cols: [U('DOC_KEY')], rows: [] } }); } catch (e) { e2 = e.message; }
+        eq(e1, 'There is no data to generate the report.', 'error en'); eq(e2, 'No hay datos para generar el reporte.', 'error es'); }
+      /* words */
+      eq(I.fmt(1234.5, 'words'), 'ONE THOUSAND TWO HUNDRED THIRTY-FOUR AND 50/100', 'words');
+      eq(I.fmt(1, 'words:DOLLAR/DOLLARS'), 'ONE DOLLAR AND 00/100', 'words singular');
+      eq(I.fmt(21.07, 'words:DOLLARS'), 'TWENTY-ONE DOLLARS AND 07/100', 'words 21');
+      eq(I.fmt(-1000000, 'words'), 'MINUS ONE MILLION AND 00/100', 'words millón');
+      eq(I.fmt(2015000.99, 'words:DOLLAR/DOLLARS'), 'TWO MILLION FIFTEEN THOUSAND DOLLARS AND 99/100', 'words 2M');
+      eq(I.fmt(1234.5, 'letras'), 'MIL DOSCIENTOS TREINTA Y CUATRO CON 50/100', 'letras sin cambios');
+      /* locale: separadores y fecha */
+      I.setLocale({}); eq(I.fmt(5000.5, 'money') + ' ' + I.fmt('17/11/1981', 'date') + ' ' + I.fmt(1234567, 'int'), '5,000.50 17/11/1981 1,234,567', 'sin locale');
+      I.setLocale({ locale: 'es-ES' }); eq(I.fmt(5000.5, 'money') + ' ' + I.fmt('17/11/1981', 'date') + ' ' + I.fmt(12.5, 'pct:1'), '5.000,50 17/11/1981 12,5%', 'es-ES');
+      I.setLocale({ locale: 'en-US' }); eq(I.fmt(5000.5, 'money') + ' ' + I.fmt('17/11/1981', 'date') + ' ' + I.fmt('17/11/1981'), '5,000.50 11/17/1981 11/17/1981', 'en-US');
+      I.setLocale({ locale: 'de-DE' }); eq(I.fmt(5000.5, 'num:1') + ' ' + I.fmt('17/11/1981', 'date'), '5.000,5 17.11.1981', 'de-DE');
+      I.setLocale({ lang: 'en', locale: { decimal: ',', date: 'dd-mon-yyyy' } }); eq(I.fmt(5000.5, 'money') + ' ' + I.fmt('17/11/1981', 'date'), '5.000,50 17-Nov-1981', 'objeto en');
+      I.setLocale({ lang: 'es', page: { locale: { thousands: ' ', date: 'DD-MON-YY' } } }); eq(I.fmt(5000.5, 'money') + ' ' + I.fmt('17/11/1981', 'date'), '5 000.50 17-nov-81', 'objeto es');
+      I.setLocale({ locale: 'xx-invalid-locale-zz' }); eq(I.fmt(5000.5, 'money'), '5,000.50', 'locale inválido');
+      I.setLocale({});
+      for (const format of ['pdf', 'xlsx', 'docx']) {
+        const { r, buf } = await B(mk({ locale: 'es-ES', fileName: 'locale-124' }), format, 'file', d124); save('locale-124__' + format + '__' + r.name, buf);
+        if (format === 'docx') { const x = await xmlOf(buf, 'word/document.xml'); if (!/5\.000,50/.test(x)) { throw new Error('1.24 docx locale'); } }
+        if (format === 'xlsx') { const c = await cells(buf); if (!c.nf.some(x => /dd\/mm\/yyyy/.test(x))) { throw new Error('1.24 xlsx locale fecha'); } }
+        console.log('OK  ', 'locale-124__' + format + '__' + r.name);
+      }
+      { const { buf } = await B(mk({ locale: 'en-US' }), 'xlsx', 'file', d124), c = await cells(buf);
+        if (!c.nf.includes('mm/dd/yyyy')) { throw new Error('1.24 xlsx en-US fecha: ' + c.nf.join('|')); } }
+      /* tamaños de página en Excel y Word */
+      for (const [size, paper, w, h] of [['a3', 8, 16838, 23811], ['a5', 11, 8391, 11906], ['legal', 5, 12240, 20160], ['LETTER', 1, 12240, 15840], [[210, 99], 1, 5613, 11906]]) {
+        const l = mk({ page: { size } });
+        const c = await cells((await B(l, 'xlsx', 'file', d124)).buf); eq(c.paper || 1, paper, 'paperSize ' + size);
+        const x = await xmlOf((await B(l, 'docx', 'file', d124)).buf, 'word/document.xml');
+        if (!new RegExp('<w:pgSz[^>]*w:w="' + w + '"[^>]*w:h="' + h + '"').test(x)) { throw new Error('1.24 docx tamaño ' + size + ': ' + (/<w:pgSz[^>]*>/.exec(x) || [''])[0]); }
+      }
+      /* alias en inglés: mismo archivo que con los nombres originales */
+      { const es = { fileName: 'alias-124', sections: [{ type: 'tabla', source: 'EMP' }, { type: 'ficha', fields: [{ label: 'A', value: '{EMP.ENAME}' }] },
+          { type: 'texto', text: 'Hola' }, { type: 'espacio', height: 4 }, { type: 'alerta', text: 'Ojo' }, { type: 'salto' },
+          { type: 'columnas', columns: [{ sections: [{ type: 'texto', text: 'a' }] }, { sections: [{ type: 'texto', text: 'b' }] }] },
+          { type: 'grupo', title: 'G', sections: [{ type: 'texto', text: 'c' }] }] };
+        const en = JSON.parse(JSON.stringify(es).replace(/"tabla"/g, '"table"').replace(/"ficha"/g, '"details"').replace(/"texto"/g, '"Text"')
+          .replace(/"espacio"/g, '"space"').replace(/"alerta"/g, '"alert"').replace(/"salto"/g, '"pagebreak"').replace(/"columnas"/g, '"columns"').replace(/"grupo"/g, '"group"'));
+        for (const format of ['pdf', 'xlsx', 'docx']) {
+          const a = (await B(es, format, 'file', d124)).buf, b = (await B(en, format, 'file', d124)).buf;
+          /* el PDF lleva un /ID aleatorio: se compara el contenido de las páginas */
+          if (format === 'pdf' ? pdfText(a) !== pdfText(b) : Buffer.compare(a, b) !== 0) { throw new Error('1.24 alias en inglés: ' + format + ' difiere'); }
+        }
+        console.log('OK  ', 'alias-124 (pdf, xlsx, docx)'); }
+      /* ejemplo 14 (va al final para no alterar la secuencia de los archivos anteriores) */
+      for (const format of ['pdf', 'xlsx', 'docx']) {
+        const layout = JSON.parse(fs.readFileSync(path.join(EX, '14-english-invoice', 'diseno.json'), 'utf8'));
+        const { r, buf } = await B(layout, format, 'file', data['14-english-invoice']);
+        save('14-english-invoice__' + format + '_file__' + r.name, buf);
+        if (format === 'docx') { const x = await xmlOf(buf, 'word/document.xml');
+          if (!/ONE THOUSAND TWO HUNDRED EIGHTY-FOUR DOLLARS AND 00\/100/.test(x) || !/11\/12\/2026/.test(x) || !/>Yes</.test(x) || !/Totals/.test(x)) { throw new Error('1.24 ejemplo 14 docx'); } }
+        console.log('OK  ', '14-english-invoice__' + format + '_file__' + r.name);
+      }
+    }
   }
 })().catch(e => { console.error('FALLÓ', e); process.exit(1); });

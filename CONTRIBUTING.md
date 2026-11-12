@@ -70,5 +70,5 @@ Con `npm` disponible, `bash publicar.sh` hace todo lo de abajo en orden: pruebas
 ## Estilo
 
 - JavaScript ES5 compatible con el navegador, sin dependencias en tiempo de ejecución más allá de las librerías listadas en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-- Mensajes al usuario en español.
+- Mensajes al usuario en español e inglés: agregue la clave en `I18N.es` e `I18N.en` (`src/novareport.js`) y use `NRT('clave')`; en PL/SQL, `nr_t('español', 'english')`.
 - Las propiedades del diseño se mantienen compatibles hacia atrás: una propiedad nueva siempre tiene un valor por defecto que conserva el comportamiento anterior.

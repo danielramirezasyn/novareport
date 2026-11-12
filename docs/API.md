@@ -43,6 +43,8 @@ El diseño JSON (secciones, columnas, estilos) está en [DISENO.md](DISENO.md).
 
 ## 2. Atributos de la Acción Dinámica
 
+Desde 1.24 el Builder muestra los atributos en inglés (*SQL Sources*, *Layout (JSON)*, *Format*, *Output*, *Items to Submit*, *Single-Document PDF*, *Word Template (URL)*, *Wait Message*, *Origin*, *Resolver Function*, *Report Query* y *Language*). La clave interna no cambió.
+
 | # | Atributo | Clave interna | Tipo | Valor por defecto | Descripción |
 |---|---|---|---|---|---|
 | 0 | **Origen** | `origin` | Lista | `attributes` | `attributes`: fuentes y diseño en esta acción. `query`: el diseño y/o las fuentes salen de una consulta a una tabla ([§3.2](#32-origen-consulta)). `resolver`: los decide una función PL/SQL por ID de reporte ([§3.1](#31-origen-resolver)). |
@@ -55,7 +57,8 @@ El diseño JSON (secciones, columnas, estilos) está en [DISENO.md](DISENO.md).
 | 5 | **Ítems a enviar** | `items` | Ítems de página | — | Ítems cuyo valor se envía a la sesión antes de ejecutar las consultas (como *Items to Submit*). Ver la nota abajo. |
 | 6 | **PDF de un documento** | `pdf_action` | Lista | `open` | `open`: abre el PDF en una pestaña nueva con pantalla de espera. `download`: lo descarga. |
 | 7 | **Plantilla Word (URL)** | `template_url` | Texto | — | URL del `.docx` usado por `docx-template`. Ver la nota abajo. |
-| 8 | **Mensaje de espera** | `message` | Texto | `Consultando datos...` | Texto de la pantalla de espera del PDF. |
+| 8 | **Wait Message** (Mensaje de espera) | `message` | Texto | — | Texto de la pantalla de espera del PDF. Vacío: `Fetching data…` o `Consultando datos…` según el idioma. |
+| 12 | **Language** | `language` | Lista | `auto` | Idioma de los textos propios del plugin: `auto` (español si la sesión de APEX está en español; inglés en los demás casos), `en` o `es`. `"lang"` en el diseño tiene prioridad. Ver [DISENO.md](DISENO.md#idioma-y-formato-regional). |
 | — | *Initialization JavaScript Code* | estándar de APEX | Función JS | — | Permite modificar las opciones antes de ejecutar. Ver [§8](#8-código-de-inicialización). |
 
 > **Diseños de más de 4000 caracteres.** Los atributos de APEX admiten 4000 caracteres (`VARCHAR2(4000)`). Para diseños o fuentes más grandes use el origen **Consulta** ([§3.2](#32-origen-consulta)) y guárdelos en una tabla (CLOB). También puede definir el JSON en *Function and Global Variable Declaration* de la página (o en un archivo estático) y escribir en el atributo el nombre de la variable:
@@ -262,6 +265,7 @@ El archivo `novareport.js` define el objeto global `window.novaReport`.
 | Miembro | Tipo | Descripción |
 |---|---|---|
 | `version` | `string` | Versión del motor, p. ej. `"1.8.0"`. |
+| `lang()` | `string` | Idioma (`en` o `es`) del último reporte generado (1.24). |
 | `run(opciones)` | `Promise<Resultado>` | Pide los datos al servidor (o usa `opciones.data`), genera y entrega el archivo con UI (espera, avance, mensajes). |
 | `build(opciones, datos)` | `Promise<Resultado>` | Solo genera: sin AJAX, sin UI, sin descargar. Para pruebas o integraciones propias. |
 | `da(config)` | `void` | Punto de entrada que APEX llama desde la Acción Dinámica. No lo invoque directamente. |
@@ -300,7 +304,8 @@ novaReport.run({
 | `items` | array \| string | — | Ítems que se envían a la sesión: arreglo de nombres (`['P5_A','P5_B']`) o selector jQuery (`'#P5_A,#P5_B'`). Se pasa tal cual a `pageItems` de `apex.server.plugin`. |
 | `pdfAction` | string | `open` | `download` evita abrir pestaña. |
 | `templateUrl` | string | — | Solo `docx-template`. |
-| `message` | string | `Consultando datos…` | Texto de la pantalla de espera. |
+| `message` | string | según el idioma | Texto de la pantalla de espera. |
+| `lang` | string | `auto` | `en`, `es` o `auto` (idioma de la sesión de APEX). `"lang"` en el diseño tiene prioridad. |
 | `loader` | boolean | `true` | Pantalla de espera en pestaña nueva (solo PDF de un documento con `open`). |
 | `hooks` | object | `{}` | Hoy existe `pdfCell` (ver abajo). |
 | `formPassword` | string | — | Contraseña de la protección de las secciones `formulario` (Word y Excel). Tiene prioridad sobre `form.password` del diseño. |
@@ -419,6 +424,7 @@ Mientras una acción está en curso, los clics nuevos en cualquier acción novaR
 |---|---|
 | `x01` | JSON con los parámetros: `{"EMPNO":"7788"}` |
 | `x02` | `Y` si la salida es `zip` (se ejecutan las fuentes `summary`), si no `N` |
+| `x04` | Idioma resuelto por el navegador (`en` o `es`) para los mensajes de error del servidor (1.24) |
 | `pageItems` | **Ítems a enviar** |
 
 **Respuesta correcta:**

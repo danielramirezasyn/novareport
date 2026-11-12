@@ -1,5 +1,19 @@
 # Cambios
 
+## 1.24.0
+- **Dos idiomas (inglés y español)** en los textos propios del plugin: mensajes de espera y de error, `Totales`, `Subtotal`, `Total`, `Van / Vienen`, `Prom. / Mín. / Máx. / Cant.`, `Sí / No` (`yn`), *Página X de Y* de Excel, el mensaje sin datos, los nombres por defecto (`reporte`, `Reporte`, `reportes.zip`) y los errores del servidor (PL/SQL).
+- El idioma se resuelve en este orden: `"lang": "en" | "es"` en el diseño; atributo nuevo **Language** (`Automatic`, `English`, `Español`; opción `lang` de `novaReport.run`); idioma de la sesión de APEX. Sesión en español: español. Cualquier otro idioma: **inglés** (el idioma por defecto).
+- Atributos del plugin en inglés en el Builder, con la ayuda en ambos idiomas. Los identificadores internos (`sources`, `layout`, `format`…) no cambian: las acciones existentes conservan sus valores. **Wait Message** ya no trae valor por defecto: vacío usa el texto del idioma (el valor anterior, `Consultando datos...`, se traduce si el idioma no es español).
+- **Alias en inglés de las secciones**: `table`, `details`, `cards`, `text`, `image`, `chart`, `code`, `form`, `line`, `columns`, `group`, `alert`, `space` y `pagebreak`. Los nombres originales (`tabla`, `ficha`…) funcionan igual y se pueden mezclar.
+- Formato **`words`**: monto en letras en inglés (`words`, `words:DOLLAR/DOLLARS`). `letras` no cambia.
+- **`locale`**: separadores de números (`money`, `num`, `int`, `pct`) y formato de fecha en PDF y Word. `"locale": "es-ES"` (o `en-US`, `de-DE`, `pt-BR`…) o `{ "decimal": ",", "thousands": ".", "date": "dd-mon-yyyy" }`. Excel recibe el formato de fecha; sus separadores los pone la configuración regional del equipo. Sin `locale`: `1,234.50` y `dd/mm/yyyy`, como antes.
+- **Tamaños de página** en Word y Excel: `a3`, `a5`, `b5`, `tabloid` y `executive` (además de `letter`, `legal` y `a4`). Word acepta también el tamaño propio en mm `[ancho, alto]`, como el PDF.
+- `novaReport.lang()` devuelve el idioma del último reporte generado. El navegador envía el idioma al servidor en `x04`.
+- Compatibilidad: con la sesión en español y sin las propiedades nuevas, los archivos de prueba de 1.23.0 salen idénticos byte a byte (fecha fija), también con el minificado. Lo único que cambia es una aplicación cuya sesión **no** está en español: los textos propios pasan a inglés. `Language = Español` en la acción o `"lang": "es"` en el diseño los deja como antes.
+- Variante APEX 23.2: atributo 12 **Language**; el resto igual.
+- Ejemplo nuevo: `14-english-invoice`. Pruebas nuevas en `test/run.js`, que ahora corre como una sesión en español.
+- Designer 0.22.0: en Documento, grupo **Idioma y formato regional** (idioma de los textos y formato regional); tamaños `a5`, `b5`, `tabloid` y `executive`; formatos `words`; al cargar un diseño convierte los alias en inglés a los nombres originales.
+
 ## 1.23.0
 - **Encabezado de página** (`pageHeader`): banda en cada página con imagen (`image.align`: izquierda, centro o derecha) y textos a la izquierda, centro y derecha, línea inferior y `firstPage: false` para omitirlo en la primera página. PDF (el contenido y las tablas largas continúan debajo de la banda), Word (encabezado de Word) y Excel (encabezado de impresión, solo texto).
 - Marcadores **`{DOCPAGE}` / `{DOCPAGES}`**: página y total del documento en `footer` y `pageHeader`; en un archivo unido cada documento numera desde 1 (en Word, sección con numeración propia).

@@ -48,7 +48,7 @@ Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) es
 
 | Propiedad | Defecto | Descripción |
 |---|---|---|
-| `page.size` | `letter` | `letter`, `legal` o `a4` (en PDF también otros formatos de jsPDF, como `a3`). Solo PDF: tamaño propio en mm, `[ancho, alto]`; con `orientation: "landscape"` el lado mayor queda horizontal (p. ej. un cheque `[210, 99]`). Excel y Word usan carta. |
+| `page.size` | `letter` | `letter`, `legal`, `a4`, `a3`, `a5`, `b5`, `tabloid` o `executive` (en PDF también otros formatos de jsPDF). Tamaño propio en mm, `[ancho, alto]`, en PDF y Word; con `orientation: "landscape"` el lado mayor queda horizontal (p. ej. un cheque `[210, 99]`). Excel usa carta para un tamaño propio. |
 | `page.orientation` | `portrait` | `portrait` o `landscape`. |
 | `page.margin` | `8` (PDF), `12.7` (Word) | Margen en mm. Excel ajusta la impresión a una página de ancho. |
 | `page.font` | `helvetica` | Letra por defecto de `texto`: `helvetica`, `times` o `courier` (alias: `arial`, `serif`, `mono`). |
@@ -63,6 +63,8 @@ Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) es
 | `title` | — | Propiedad *Título* del PDF y del Word. Acepta plantillas. |
 | `fileName` | `reporte` | Nombre de cada documento, sin extensión. Acepta plantillas (`{DOC.X}`, `{TODAY}`). |
 | `emptyMessage` | `No hay datos para generar el reporte.` | Mensaje si `DOCS` no trae filas. |
+| `lang` | idioma de la sesión | `en` o `es`: idioma de los textos propios del plugin. Ver [Idioma y formato regional](#idioma-y-formato-regional). |
+| `locale` | — | Separadores de números y formato de fecha: `"es-ES"` o `{ "decimal", "thousands", "date" }`. |
 | `watermark` | — | Texto en diagonal sobre cada página. Ver [Marca de agua](#marca-de-agua). |
 | `pageHeader` | — | Encabezado de cada página (logo y textos). Ver [Encabezado de página](#encabezado-de-página). |
 | `pdf` | — | Contraseña y permisos del PDF. Ver [PDF con contraseña](#pdf-con-contraseña). |
@@ -75,6 +77,72 @@ Unidades: todas las medidas (`margin`, `width`, `height`, `x`, `y`, `gap`…) es
 | `batch` | — | Nombres y resumen del lote. Ver [Lotes](#lotes-y-resumen). |
 
 Sin `footer`, el PDF y el Word no llevan pie. En Excel el pie usa `footer.left` y siempre muestra *Página X de Y* a la derecha.
+
+## Idioma y formato regional
+
+### Idioma (`lang`)
+
+Los textos que escribe usted (títulos, etiquetas, pie) salen tal cual. `lang` decide el idioma de los textos **propios del plugin**:
+
+| Texto | `es` | `en` |
+|---|---|---|
+| Fila de totales / subtotal / total de `pivot` | `Totales` / `Subtotal {COL}` / `Total` | `Totals` / `Subtotal {COL}` / `Total` |
+| Agregados mezclados | `Prom.` `Mín.` `Máx.` `Cant.` | `Avg.` `Min.` `Max.` `Count` |
+| `carry` (van / vienen) | `Van` / `Vienen` | `Carried forward` / `Brought forward` |
+| Formato `yn` | `Sí` / `No` | `Yes` / `No` |
+| Pie de Excel | `Página X de Y` | `Page X of Y` |
+| Sin datos (`emptyMessage` vacío) | `No hay datos para generar el reporte.` | `There is no data to generate the report.` |
+| Nombres por defecto | `reporte`, `Reporte`, `reportes.zip` | `report`, `Report`, `reports.zip` |
+| Mensajes de espera y de error | español | inglés |
+
+El idioma se toma, en este orden, de:
+
+1. `"lang": "en"` o `"lang": "es"` en el diseño.
+2. El atributo **Language** de la acción dinámica (u opción `lang` de `novaReport.run`), si no es `Automatic`.
+3. El idioma de la sesión de APEX: si es español (`es`, `es-pa`…) sale en español; con cualquier otro idioma, en **inglés**.
+
+```json
+{ "lang": "en", "sections": [ { "type": "table", "source": "EMP", "totals": ["SAL"] } ] }
+```
+
+### Secciones en inglés
+
+`type` acepta el nombre original o su alias en inglés; se pueden mezclar en un mismo diseño.
+
+| Original | Alias | Original | Alias |
+|---|---|---|---|
+| `tabla` | `table` | `formulario` | `form` |
+| `ficha` | `details` (o `record`) | `linea` | `line` |
+| `tarjetas` | `cards` | `columnas` | `columns` |
+| `texto` | `text` | `grupo` | `group` |
+| `imagen` | `image` | `alerta` | `alert` |
+| `grafico` | `chart` | `espacio` | `space` (o `spacer`) |
+| `codigo` | `code` (o `barcode`) | `salto` | `pagebreak` (o `break`) |
+
+`header` y `pivot` se llaman igual. El alias vale también en `cell.type` y en `block.type`.
+
+### Formato regional (`locale`)
+
+Separadores de los formatos `money`, `num`, `int` y `pct`, y formato de las fechas (`date`, columnas `DATE`, `{TODAY}` y `{NOW}`) en PDF y Word.
+
+```json
+{ "locale": "es-ES" }
+{ "locale": { "decimal": ",", "thousands": ".", "date": "dd-mon-yyyy" } }
+```
+
+| Valor | Número | Fecha |
+|---|---|---|
+| sin `locale` | `1,234.50` | `17/11/1981` |
+| `"en-US"` | `1,234.50` | `11/17/1981` |
+| `"es-ES"`, `"pt-BR"` | `1.234,50` | `17/11/1981` |
+| `"de-DE"` | `1.234,50` | `17.11.1981` |
+| `{ "decimal": ",", "date": "dd-mon-yyyy" }` | `1.234,50` | `17-nov-1981` (`17-Nov-1981` con `lang: "en"`) |
+
+- Con un código (`"es-ES"`) los separadores y el orden de la fecha se toman de `Intl` del navegador. Un código que el navegador no reconoce se ignora.
+- En el objeto: `decimal`, `thousands` (un carácter; con `decimal: ","` y sin `thousands` se usa el punto) y `date` con `dd`, `mm`, `yyyy`, `yy` y `mon` (mes abreviado en el idioma del reporte).
+- También se acepta dentro de `page`: `"page": { "locale": "es-ES" }`.
+- Las máscaras (`mask:`, `ora:`) no cambian: ya definen sus separadores.
+- En Excel las celdas siguen siendo números y fechas reales: la fecha recibe el formato del `locale` y los separadores de miles y decimales los pone la configuración regional del equipo.
 
 ## Plantillas de texto `{...}`
 
@@ -107,9 +175,11 @@ Se usan en `{COL|formato}` o en la propiedad `"fmt"` de columnas y campos.
 | `pct` / `pct:1` | `12.5` | `12.50%` / `12.5%` | número sin formato (`12.5`) |
 | `date` | `09/12/1982` | `09/12/1982` | fecha real `dd/mm/yyyy` |
 | `upper` / `lower` | `Ana` | `ANA` / `ana` | texto |
-| `yn` | `Y`, `S` / `N` | `Sí` / `No` | texto |
+| `yn` | `Y`, `S` / `N` | `Sí` / `No` (`Yes` / `No` en inglés) | texto |
 | `letras` | `1234.5` | `MIL DOSCIENTOS TREINTA Y CUATRO CON 50/100` | texto |
 | `letras:BALBOA/BALBOAS` | `1` / `21.07` | `UN BALBOA CON 00/100` / `VEINTIÚN BALBOAS CON 07/100` | texto |
+| `words` | `1234.5` | `ONE THOUSAND TWO HUNDRED THIRTY-FOUR AND 50/100` | texto |
+| `words:DOLLAR/DOLLARS` | `1` / `21.07` | `ONE DOLLAR AND 00/100` / `TWENTY-ONE DOLLARS AND 07/100` | texto |
 | `mask:B/. #,##0.00` | `1234.5` | `B/. 1,234.50` | número con el mismo formato |
 | `mask:$#,##0.00;($#,##0.00)` | `-1234.5` | `($1,234.50)` | número |
 | `mask:#,##0.00;-#,##0.00;"-"` | `0` | `-` | número |
@@ -122,7 +192,8 @@ Se usan en `{COL|formato}` o en la propiedad `"fmt"` de columnas y campos.
 | `ora:FM999G990D00PR` | `-1234.5` | `<1,234.50>` | número |
 | `ora:FM999G990D00MI` | `-1234.5` | `1,234.50-` | número |
 
-- Los números usan coma para miles y punto para decimales (en Excel, los separadores los pone la configuración regional del equipo).
+- Los números usan coma para miles y punto para decimales, salvo que el diseño defina [`locale`](#formato-regional-locale) (en Excel, los separadores los pone la configuración regional del equipo).
+- `words` es `letras` en inglés: `singular/plural` o un solo nombre (`words:DOLLARS`); negativos: `MINUS …`.
 - `pct` no multiplica por 100: espera el porcentaje ya calculado.
 - `letras` redondea a 2 decimales. Con moneda, `singular/plural` (`letras:DÓLAR/DÓLARES`) o un solo nombre (`letras:BALBOAS`). Agrega `DE` tras millones (`UN MILLÓN DE BALBOAS`). Negativos: `MENOS …`. En Excel queda como texto.
 - **`mask:`** (1.20) es una máscara estilo Excel, igual en PDF, Excel y Word. En Excel la celda sigue siendo número (los totales suman) y recibe el mismo formato.

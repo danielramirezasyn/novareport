@@ -1,0 +1,25 @@
+{
+  "lang": "en",
+  "locale": "en-US",
+  "page": { "size": "letter" },
+  "title": "Invoice {DOC.INVOICE_NO}",
+  "fileName": "invoice_{DOC.INVOICE_NO}",
+  "pageHeader": { "left": "NovaCode, S.A.", "right": "Page {DOCPAGE} of {DOCPAGES}" },
+  "sections": [
+    { "type": "header", "title": "Invoice {DOC.INVOICE_NO}", "subtitle": "{DOC.CUSTOMER}", "right": "{DOC.INVOICE_DATE|date}" },
+    { "type": "details", "columns": 2, "fields": [
+      { "label": "Customer", "value": "{DOC.CUSTOMER}" },
+      { "label": "Tax ID", "value": "{DOC.TAX_ID}" },
+      { "label": "Date", "value": "{DOC.INVOICE_DATE}", "fmt": "date" },
+      { "label": "Paid", "value": "{DOC.PAID}", "fmt": "yn" } ] },
+    { "type": "table", "source": "ITEMS", "columns": [
+      { "col": "DESCRIPTION", "label": "Description" },
+      { "col": "QTY", "label": "Qty", "fmt": "int" },
+      { "col": "PRICE", "label": "Unit price", "fmt": "money" },
+      { "col": "AMOUNT", "label": "Amount", "fmt": "money" } ],
+      "totals": ["AMOUNT"] },
+    { "type": "text", "text": "Amount in words: {DOC.TOTAL|words:DOLLAR/DOLLARS}" },
+    { "type": "alert", "source": "ITEMS", "text": "Payment due within 30 days.", "color": "#FFF4CE" }
+  ],
+  "footer": { "left": "Generated {NOW}", "right": "Page {PAGE} of {PAGES}" }
+}

@@ -35,6 +35,7 @@ The detailed reference ([docs/API.md](docs/API.md), [docs/DISENO.md](docs/DISENO
 | | |
 |---|---|
 | **One layout, three formats** | The same JSON produces PDF, Excel (`.xlsx` with colors, `=SUM()` totals, autofilter, multiple sheets) and Word (editable `.docx`). |
+| **English and Spanish** | The plugin's own texts (totals, subtotals, *Page X of Y*, messages) come out in English or Spanish according to `lang` in the layout, the **Language** attribute or the APEX session language (English by default). Section types have English aliases (`table`, `details`, `text`…) and `locale` sets number separators and date format. |
 | **Batches** | One file per document inside a **ZIP**, with an optional **summary** document; or every document **merged into a single file**. |
 | **Declarative layout** | Header band, key/value card, tables with totals (sum, average, min, max, count), control breaks with subtotals, grouped headers and conditional styles, alerts, rich text (bold, italic, underline, strike-through, colors, 3 fonts, **hyperlinks**), images (URL or **BLOB**), charts, **QR** and **Code 128**, watermark, lines and **absolutely positioned** elements. |
 | **Tiles and grids** | Summary **tiles** (label + highlighted value), key/value cards in a **grid** with colored labels, and tables with borders and left- or right-aligned headers, identical in all three formats. |
@@ -258,6 +259,7 @@ Events on `document`: `novareport-start`, `novareport-progress`, `novareport-end
 | [11 · Check](examples/11-cheque) | Custom page size and amount in words. |
 | [12 · Hyperlinks](examples/12-hipervinculos) | Links in text, columns, cards and images; APEX page URLs. |
 | [13 · Account statement](examples/13-estado-cuenta) | Page header, crosstab, nested control breaks and carried-forward rows. |
+| [14 · English invoice](examples/14-english-invoice) | `lang`, `locale`, English section aliases (`table`, `details`, `text`) and amount in words (`words`). |
 
 ## Testing without APEX
 

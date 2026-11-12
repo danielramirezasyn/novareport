@@ -1,5 +1,5 @@
 /*!
- * novaReport 1.23.0 - Reportes PDF / Excel / Word para Oracle APEX
+ * novaReport 1.24.0 - PDF / Excel / Word reports for Oracle APEX (EN / ES)
  * https://github.com/danielramirezasyn/novareport - Licencia MIT
  * NovaCode - plugin de Acción Dinámica COM.NOVACODE.NOVAREPORT
  *
@@ -10,7 +10,7 @@
 window.novaReport = (function () {
   'use strict';
 
-  var VERSION = '1.23.0';
+  var VERSION = '1.24.0';
 
   /* ------------------------------------------------------------------ librerías */
   var LIBS = {
@@ -46,7 +46,7 @@ window.novaReport = (function () {
       var s = document.createElement('script');
       s.src = url;
       s.onload = function () { window.define = amd; resolve(); };
-      s.onerror = function () { window.define = amd; reject(new Error('No se pudo cargar la librería: ' + url)); };
+      s.onerror = function () { window.define = amd; reject(new Error(NRT('libLoad', url))); };
       document.head.appendChild(s);
     });
   }
@@ -54,6 +54,125 @@ window.novaReport = (function () {
     return names.reduce(function (p, n) {
       return p.then(function () { return LIBS[n].ok() ? null : loadScript(imgUrl(LIBS[n].url)); });
     }, Promise.resolve());
+  }
+
+
+  /* ------------------------------------------------------------------ idioma (1.24) y configuración regional
+     Idioma de los textos propios del plugin: layout.lang > opción lang (atributo Language) > idioma de la sesión de APEX.
+     Sesión en español -> 'es' (igual que hasta 1.23); cualquier otro idioma -> 'en'. */
+  var LANG = 'en';
+  var I18N = {
+    es: {
+      libLoad: 'No se pudo cargar la librería: {0}', yes: 'Sí', no: 'No', imgBad: 'novaReport: imagen inválida en {0}',
+      aggAvg: 'Prom.', aggMin: 'Mín.', aggMax: 'Máx.', aggCount: 'Cant.', totals: 'Totales', total: 'Total', subtotal: 'Subtotal',
+      carry: 'Van', carryFrom: 'Vienen',
+      fieldBad: 'Nombre de campo inválido: "{0}". Use letras, números y _ (hasta 40, sin espacios ni puntos) y que no parezca una celda de Excel (A1, R1C1).',
+      fieldDup: 'Nombre de campo repetido en el documento: "{0}".',
+      fieldType: 'Tipo de campo no soportado: "{0}" (text, multiline, list, checkbox).',
+      listEmpty: 'El campo "{0}" es una lista sin opciones (options u optionsFrom).',
+      wordPw: 'La contraseña de protección de Word admite de 1 a 15 caracteres ASCII (sin tildes ni ñ).',
+      pdfLoad: 'No se pudo cargar el PDF {0} ({1})', pdfAppend: 'No se pudo anexar el PDF: {0}',
+      imgLoad: 'No se pudo cargar la imagen {0} ({1})', imgFmt: 'Formato de imagen no soportado (use PNG o JPG).',
+      canvas: 'Se requiere un navegador (canvas) para generar gráficos.', qrLib: 'No se cargó la librería de códigos QR.',
+      codeKind: 'Tipo de código no soportado: {0} (use qr o code128).', chartLib: 'No se cargó la librería de gráficos (Chart.js).',
+      appendPw: 'No se puede anexar PDFs a un PDF con contraseña.', pickList: 'Elija un valor de la lista.',
+      maxLen: 'Máximo {0} caracteres.', xlPage: 'Página &P de &N',
+      wordFields: 'Word: no se pudieron colocar todos los campos del formulario ({0} de {1}).',
+      tplUrl: 'Defina la URL de la plantilla Word (atributo "Plantilla Word").', tplDl: 'No se pudo descargar la plantilla ({0})',
+      generating: 'Generando reporte', readFile: 'No se pudo leer el archivo generado.',
+      saveErr: 'No se pudo guardar en el servidor: {0}', notSaved: 'El servidor no guardó el documento.',
+      fmtBad: 'Formato no soportado: {0}', noData: 'No hay datos para generar el reporte.',
+      batchMax: 'El lote supera el máximo de {0} documentos.', layoutNF: 'No se encontró el diseño: {0}',
+      querying: 'Consultando datos…', layoutBad: 'Diseño inválido: {0}', reportReq: 'Indique el reporte a generar (data-report).',
+      dataErr: 'Error al obtener los datos.', commErr: 'Error de comunicación: {0}',
+      layoutMissing: 'Falta el diseño: la consulta del reporte no devolvió LAYOUT y el atributo Diseño está vacío.',
+      building: 'Armando el documento…', zipping: 'Comprimiendo {0} archivos…', genN: 'Generando {0} de {1}…',
+      needApex: 'Guardar en el servidor requiere APEX.', saving: 'Guardando en el servidor…', saved: 'Documento guardado: {0}',
+      zipDone: 'ZIP generado: {0} archivos de {1} documentos.', failed: 'No se pudo generar el reporte.',
+      fileName: 'reporte', zipName: 'reportes.zip', sheet: 'Reporte', sheetN: 'Hoja', file: 'archivo',
+      months: 'ene,feb,mar,abr,may,jun,jul,ago,sep,oct,nov,dic'
+    },
+    en: {
+      libLoad: 'Could not load library: {0}', yes: 'Yes', no: 'No', imgBad: 'novaReport: invalid image in {0}',
+      aggAvg: 'Avg.', aggMin: 'Min.', aggMax: 'Max.', aggCount: 'Count', totals: 'Totals', total: 'Total', subtotal: 'Subtotal',
+      carry: 'Carried forward', carryFrom: 'Brought forward',
+      fieldBad: 'Invalid field name: "{0}". Use letters, numbers and _ (up to 40, no spaces or dots) and avoid names that look like an Excel cell (A1, R1C1).',
+      fieldDup: 'Duplicate field name in the document: "{0}".',
+      fieldType: 'Unsupported field type: "{0}" (text, multiline, list, checkbox).',
+      listEmpty: 'Field "{0}" is a list with no options (options or optionsFrom).',
+      wordPw: 'The Word protection password must be 1 to 15 ASCII characters (no accented letters).',
+      pdfLoad: 'Could not load PDF {0} ({1})', pdfAppend: 'Could not append the PDF: {0}',
+      imgLoad: 'Could not load image {0} ({1})', imgFmt: 'Unsupported image format (use PNG or JPG).',
+      canvas: 'A browser (canvas) is required to render charts.', qrLib: 'The QR code library was not loaded.',
+      codeKind: 'Unsupported code type: {0} (use qr or code128).', chartLib: 'The chart library (Chart.js) was not loaded.',
+      appendPw: 'PDFs cannot be appended to a password-protected PDF.', pickList: 'Choose a value from the list.',
+      maxLen: 'Maximum {0} characters.', xlPage: 'Page &P of &N',
+      wordFields: 'Word: not all form fields could be placed ({0} of {1}).',
+      tplUrl: 'Set the Word template URL ("Word Template" attribute).', tplDl: 'Could not download the template ({0})',
+      generating: 'Generating report', readFile: 'Could not read the generated file.',
+      saveErr: 'Could not save on the server: {0}', notSaved: 'The server did not save the document.',
+      fmtBad: 'Unsupported format: {0}', noData: 'There is no data to generate the report.',
+      batchMax: 'The batch exceeds the maximum of {0} documents.', layoutNF: 'Layout not found: {0}',
+      querying: 'Fetching data…', layoutBad: 'Invalid layout: {0}', reportReq: 'Specify the report to generate (data-report).',
+      dataErr: 'Error fetching the data.', commErr: 'Communication error: {0}',
+      layoutMissing: 'Missing layout: the report query returned no LAYOUT and the Layout attribute is empty.',
+      building: 'Building the document…', zipping: 'Compressing {0} files…', genN: 'Generating {0} of {1}…',
+      needApex: 'Saving on the server requires APEX.', saving: 'Saving on the server…', saved: 'Document saved: {0}',
+      zipDone: 'ZIP generated: {0} files from {1} documents.', failed: 'The report could not be generated.',
+      fileName: 'report', zipName: 'reports.zip', sheet: 'Report', sheetN: 'Sheet', file: 'file',
+      months: 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec'
+    }
+  };
+  function NRT(k) {
+    var s = (I18N[LANG] || I18N.en)[k], a = arguments;
+    if (s === undefined) { s = I18N.en[k]; }
+    return String(s).replace(/\{(\d)\}/g, function (m, i) { var v = a[+i + 1]; return v === undefined || v === null ? '' : String(v); });
+  }
+  function pickLang(v) { v = String(v || '').toLowerCase(); return /^es/.test(v) ? 'es' : (/^en/.test(v) ? 'en' : null); }
+  function autoLang() {
+    var l = '';
+    try { if (window.apex && apex.locale && apex.locale.getLanguage) { l = apex.locale.getLanguage() || ''; } } catch (e) {}
+    try { if (!l && typeof document !== 'undefined' && document.documentElement) { l = document.documentElement.lang || ''; } } catch (e2) {}
+    return /^es/i.test(String(l)) ? 'es' : 'en';
+  }
+  /* locale (1.24): separadores de números y formato de fecha de PDF y Word; Excel recibe el formato de fecha.
+     "locale": "es-ES" | "en-US" | "de-DE" (los toma de Intl) o { "decimal": ",", "thousands": ".", "date": "dd/mm/yyyy" }.
+     Sin locale: 1,234.50 y dd/mm/yyyy, como hasta 1.23. */
+  var LOC = { dec: '.', grp: ',', date: null, xl: 'dd/mm/yyyy' };
+  function setLocale(layout, opt) {
+    LANG = pickLang(layout && layout.lang) || pickLang(opt && opt.lang) || autoLang();
+    var l = layout && (layout.locale || (layout.page && layout.page.locale)), d = '.', g = ',', dt = null, x;
+    if (typeof l === 'string' && l && typeof Intl !== 'undefined') {
+      try {
+        new Intl.NumberFormat(l).formatToParts(1234567.5).forEach(function (p) {
+          if (p.type === 'decimal') { d = p.value; } else if (p.type === 'group') { g = /\s/.test(p.value) ? ' ' : p.value; }
+        });
+        dt = new Intl.DateTimeFormat(l, { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).formatToParts(new Date(Date.UTC(2001, 10, 22))).map(function (p) {
+          return p.type === 'day' ? 'dd' : (p.type === 'month' ? 'mm' : (p.type === 'year' ? 'yyyy' : (p.type === 'literal' ? p.value : '')));
+        }).join('');
+      } catch (e) { d = '.'; g = ','; dt = null; }
+    } else if (l && typeof l === 'object') {
+      if (l.decimal) { d = String(l.decimal).charAt(0); }
+      if (l.thousands !== undefined && l.thousands !== null) { g = String(l.thousands).charAt(0); }
+      else if (d === ',') { g = '.'; }
+      if (l.date) { dt = String(l.date); }
+    }
+    if (dt && !/dd/i.test(dt)) { dt = null; }
+    x = dt ? dt.replace(/yyyy|yy|mmm|mon|mm|dd/gi, function (t) { t = t.toLowerCase(); return t === 'mon' ? 'mmm' : t; }) : 'dd/mm/yyyy';
+    LOC = { dec: d, grp: g, date: dt && dt.toLowerCase() !== 'dd/mm/yyyy' ? dt : null, xl: x };
+  }
+  function locNum(s) {
+    if (LOC.dec === '.' && LOC.grp === ',') { return s; }
+    return String(s).replace(/[,.]/g, function (c) { return c === ',' ? LOC.grp : LOC.dec; });
+  }
+  function locDate(s) {
+    if (!LOC.date) { return s; }
+    var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s));
+    if (!m) { return s; }
+    return LOC.date.replace(/yyyy|yy|mmm|mon|mm|dd/gi, function (t) {
+      t = t.toLowerCase();
+      return t === 'yyyy' ? m[3] : (t === 'yy' ? m[3].substr(2) : (t === 'dd' ? m[1] : (t === 'mm' ? m[2] : NRT('months').split(',')[+m[2] - 1])));
+    });
   }
 
   /* ------------------------------------------------------------------ utilidades */
@@ -71,35 +190,37 @@ window.novaReport = (function () {
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function now() {
     var d = new Date();
-    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return locDate(pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
-  function today() { return now().substr(0, 10); }
+  function today() { var s = now(); return s.substr(0, s.lastIndexOf(' ')); }
   function label(col) { var s = String(col).toLowerCase().replace(/_/g, ' '); return s.charAt(0).toUpperCase() + s.slice(1); }
   function parseDate(s) {
     var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s || ''));
     return m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : null;
   }
-  function safeName(s) { return String(s || 'archivo').replace(/[\\\/:*?"<>|]+/g, '_').trim(); }
+  function safeName(s) { return String(s || NRT('file')).replace(/[\\\/:*?"<>|]+/g, '_').trim(); }
 
   function fmt(v, f) {
     if (v === null || v === undefined || v === '') { return ''; }
-    if (!f) { return String(v); }
+    if (!f) { return LOC.date ? locDate(String(v)) : String(v); }
     if (isMask(f)) { return maskFmt(v, f); }
     var p = f.split(':'), k = p[0];
     if (k === 'money' || k === 'num') {
       var d = p[1] !== undefined ? +p[1] : 2, n = Number(v);
-      return isNaN(n) ? String(v) : n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+      return isNaN(n) ? String(v) : locNum(n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }));
     }
-    if (k === 'int') { return isNaN(Number(v)) ? String(v) : Math.round(Number(v)).toLocaleString('en-US'); }
+    if (k === 'int') { return isNaN(Number(v)) ? String(v) : locNum(Math.round(Number(v)).toLocaleString('en-US')); }
+    if (k === 'date') { return locDate(String(v)); }
     if (k === 'pct') { return fmt(v, 'num:' + (p[1] || 2)) + '%'; }
     if (k === 'upper') { return String(v).toUpperCase(); }
     if (k === 'lower') { return String(v).toLowerCase(); }
-    if (k === 'yn') { return v === 'Y' || v === 'S' ? 'Sí' : (v === 'N' ? 'No' : String(v)); }
+    if (k === 'yn') { return v === 'Y' || v === 'S' ? NRT('yes') : (v === 'N' ? NRT('no') : String(v)); }
     if (k === 'letras') { return isNaN(Number(v)) ? String(v) : letras(Number(v), p.slice(1).join(':')); }
+    if (k === 'words') { return isNaN(Number(v)) ? String(v) : words(Number(v), p.slice(1).join(':')); }
     return String(v);
   }
   /* Formatos que siempre producen texto (Excel no deja el número) */
-  function textFmt(f) { return /^(upper|lower|yn|letras)(:|$)/.test(f || ''); }
+  function textFmt(f) { return /^(upper|lower|yn|letras|words)(:|$)/.test(f || ''); }
 
   /* 1.20: máscara numérica estilo Excel -> mask:B/. #,##0.00;(B/. #,##0.00);"-"
      Secciones: positivo;negativo;cero. Literales sueltos o entre comillas, \x escapa un carácter,
@@ -240,7 +361,7 @@ window.novaReport = (function () {
     }).join(';');
   }
   /* mask:..., ora:... o una máscara escrita sin prefijo (B/. #,##0.00): cualquier formato que no sea una palabra conocida y tenga # o 0 */
-  var FMT_KEYS = /^(money|num|int|pct|date|upper|lower|yn|letras)(:|$)/;
+  var FMT_KEYS = /^(money|num|int|pct|date|upper|lower|yn|letras|words)(:|$)/;
   function isMask(f) { f = f || ''; return /^(mask|ora):/.test(f) || (!FMT_KEYS.test(f) && /[#0]/.test(f)); }
   function maskSrc(f) { f = String(f); return /^mask:/.test(f) ? f.slice(5) : f; }
   /* numFmt de Excel para una columna numérica de tabla */
@@ -285,6 +406,32 @@ window.novaReport = (function () {
       t += ' ' + (e === 1 && mm.length > 1 ? mm[0] : mm[mm.length - 1]);
     }
     return (neg ? 'MENOS ' : '') + t + ' CON ' + (d < 10 ? '0' : '') + d + '/100';
+  }
+
+  /* 1.24: monto en letras en inglés: words -> ONE THOUSAND TWO HUNDRED THIRTY-FOUR AND 50/100; words:DOLLAR/DOLLARS -> ... DOLLARS AND 50/100 */
+  var W_U = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN',
+             'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
+  var W_D = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+  function words999(n) {
+    var c = Math.floor(n / 100), r = n % 100, out = [];
+    if (c) { out.push(W_U[c] + ' HUNDRED'); }
+    if (r) { out.push(r < 20 ? W_U[r] : W_D[Math.floor(r / 10)] + (r % 10 ? '-' + W_U[r % 10] : '')); }
+    return out.join(' ');
+  }
+  function wordsInt(n) {
+    if (n === 0) { return 'ZERO'; }
+    var out = [];
+    [[1e12, 'TRILLION'], [1e9, 'BILLION'], [1e6, 'MILLION'], [1e3, 'THOUSAND']].forEach(function (x) {
+      var q = Math.floor(n / x[0]);
+      if (q) { out.push(wordsInt(q) + ' ' + x[1]); n -= q * x[0]; }
+    });
+    if (n) { out.push(words999(n)); }
+    return out.join(' ');
+  }
+  function words(v, cur) {
+    var neg = v < 0, c = Math.round(Math.abs(v) * 100), e = Math.floor(c / 100), d = c % 100, t = wordsInt(e);
+    if (cur) { var mm = String(cur).toUpperCase().split('/'); t += ' ' + (e === 1 && mm.length > 1 ? mm[0] : mm[mm.length - 1]); }
+    return (neg ? 'MINUS ' : '') + t + ' AND ' + (d < 10 ? '0' : '') + d + '/100';
   }
 
   /* ------------------------------------------------------------------ contexto y plantillas */
@@ -522,7 +669,7 @@ window.novaReport = (function () {
     if (b.type === 'imagen') {
       var v = b.field ? row[String(b.field).toUpperCase()] : null, im = null;
       try { im = v ? imgFromB64(v) : (b.url && !b.field ? IMG[imgUrl(tpl(b.url, ctx, row))] : null); }
-      catch (e) { if (window.console) { console.warn('novaReport: imagen inválida en ' + b.field, e); } }
+      catch (e) { if (window.console) { console.warn(NRT('imgBad', b.field), e); } }
       if (!im) { return null; }
       var sz = imgSize({ width: b.width || (b.height ? undefined : 15), height: b.height }, im);
       return { im: im, w: sz.w, h: sz.h };
@@ -563,9 +710,12 @@ window.novaReport = (function () {
     return out;
   }
   /* Totales y subtotales: ["COL"] (suma) o [{ "col": "COL", "fn": "sum|avg|min|max|count" }] */
+  /* 1.24: tamaños de papel de Excel (pageSetup.paperSize) */
+  var XL_PAPER = { letter: 1, tabloid: 3, legal: 5, executive: 7, a3: 8, a4: 9, a5: 11, b5: 13 };
   var AGG_XL = { sum: 9, avg: 1, min: 5, max: 4, count: 3 };               // código de SUBTOTAL() en Excel
   var AGG_FX = { sum: 'SUM', avg: 'AVERAGE', min: 'MIN', max: 'MAX', count: 'COUNTA' };
-  var AGG_PRE = { avg: 'Prom.', min: 'Mín.', max: 'Máx.', count: 'Cant.' };
+  var AGG_KEY = { avg: 'aggAvg', min: 'aggMin', max: 'aggMax', count: 'aggCount' };
+  function aggPre(fn) { return AGG_KEY[fn] ? NRT(AGG_KEY[fn]) : ''; }
   function aggList(a) {
     return (Array.isArray(a) ? a : []).map(function (x) {
       var o = x && typeof x === 'object' ? x : { col: x }, f = String(o.fn || 'sum').toLowerCase();
@@ -600,7 +750,7 @@ window.novaReport = (function () {
     else if (a.fn === 'min' || a.fn === 'max') { t = numLike(v) ? fmt(v, c.fmt || 'money') : fmt(v, c.fmt); }
     else if (a.fn === 'avg') { t = fmt(v, c.fmt && c.fmt !== 'int' ? c.fmt : 'money'); }
     else { t = fmt(v, c.fmt || 'money'); }
-    return t && mixed && AGG_PRE[a.fn] ? AGG_PRE[a.fn] + ' ' + t : t;
+    return t && mixed && aggPre(a.fn) ? aggPre(a.fn) + ' ' + t : t;
   }
   /* Fila de totales: at = primera columna con agregado; el texto ocupa las columnas 0..at-1
      (si at = 0 el texto va en su propia fila, encima de los valores) */
@@ -614,7 +764,7 @@ window.novaReport = (function () {
     return { at: at < 0 ? cols.length : at, cells: cells, text: text };
   }
   /* Texto de la fila de totales: plantilla; {COUNT} = filas de la tabla */
-  function totText(sec, ctx, rows) { return tpl(sec.totalsLabel || 'Totales', ctx, { COUNT: rows.length }); }
+  function totText(sec, ctx, rows) { return tpl(sec.totalsLabel || NRT('totals'), ctx, { COUNT: rows.length }); }
   /* Filas de AutoTable para un aggRow */
   function pdfAgg(ar, n) {
     var lab = { content: ar.text, colSpan: ar.at || n, styles: { halign: 'left' } };
@@ -681,7 +831,7 @@ window.novaReport = (function () {
     if (!c) { return null; }
     var o = c === true ? {} : (Array.isArray(c) ? { cols: c } : c);
     var cols = aggList(o.cols || sec.totals).filter(function (a) { return a.fn === 'sum'; });
-    return cols.length ? { cols: cols, label: o.label || 'Van', labelFrom: o.labelFrom || 'Vienen' } : null;
+    return cols.length ? { cols: cols, label: o.label || NRT('carry'), labelFrom: o.labelFrom || NRT('carryFrom') } : null;
   }
   /* Relleno del encabezado de grupo: nivel 0 = theme.group; niveles internos, más claro */
   function groupFill(th, lvl) {
@@ -695,7 +845,7 @@ window.novaReport = (function () {
     for (k in it.r) { r[k] = it.r[k]; }
     r.COUNT = it.rows.length;
     var t = lvlOpt(it.k === 'head' ? sec.breakTitle : sec.breakLabel, it.lvl || 0);
-    if (t === undefined || t === null || t === true) { t = it.k === 'head' ? '{' + bc + '}' : 'Subtotal {' + bc + '}'; }
+    if (t === undefined || t === null || t === true) { t = it.k === 'head' ? '{' + bc + '}' : NRT('subtotal') + ' {' + bc + '}'; }
     return tpl(t, ctx, r);
   }
   function fieldText(f, ctx, row) {
@@ -711,7 +861,7 @@ window.novaReport = (function () {
   function formName(n) {
     var s = String(n === null || n === undefined ? '' : n);
     if (!/^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(s) || /^[A-Za-z]{1,3}[0-9]+$/.test(s) || /^[RrCc]$/.test(s) || /^[Rr][0-9]*[Cc][0-9]*$/.test(s)) {
-      throw new Error('Nombre de campo inválido: "' + s + '". Use letras, números y _ (hasta 40, sin espacios ni puntos) y que no parezca una celda de Excel (A1, R1C1).');
+      throw new Error(NRT('fieldBad', s));
     }
     return s;
   }
@@ -720,7 +870,7 @@ window.novaReport = (function () {
     var seen = {};
     return function (n) {
       var k = n.toLowerCase();
-      if (seen[k]) { throw new Error('Nombre de campo repetido en el documento: "' + n + '".'); }
+      if (seen[k]) { throw new Error(NRT('fieldDup', n)); }
       seen[k] = 1;
       return n;
     };
@@ -742,11 +892,11 @@ window.novaReport = (function () {
     return (sec.fields || []).filter(function (f) { return f && (!f.when || cond(f.when, ctx, fr)); }).map(function (f) {
       if (f.empty) { return { empty: true, span: f.span }; }
       var input = String(f.input || 'text').toLowerCase();
-      if (!FORM_INPUTS[input]) { throw new Error('Tipo de campo no soportado: "' + f.input + '" (text, multiline, list, checkbox).'); }
+      if (!FORM_INPUTS[input]) { throw new Error(NRT('fieldType', f.input)); }
       var name = formName(f.name) + (suffix || '');
       var val = f.value === undefined || f.value === null ? '' : String(fieldText(f, ctx, fr));
       var opts = input === 'list' ? formOptions(f, ctx) : [];
-      if (input === 'list' && !opts.length) { throw new Error('El campo "' + name + '" es una lista sin opciones (options u optionsFrom).'); }
+      if (input === 'list' && !opts.length) { throw new Error(NRT('listEmpty', name)); }
       var max = (input === 'text' || input === 'multiline') && Number(f.maxLength) > 0 ? Math.floor(Number(f.maxLength)) : 0;
       if (input !== 'multiline') { val = val.replace(/\r?\n/g, ' '); }
       if (input === 'list' && opts.indexOf(val) < 0) { val = ''; }
@@ -848,7 +998,7 @@ window.novaReport = (function () {
   }
   /* Hash de documentProtection: SHA-512(sal + clave heredada en UTF-16LE), repetido spin veces con el contador */
   function wordHash(pw, salt, spin) {
-    if (!/^[\x20-\x7E]{1,15}$/.test(pw)) { throw new Error('La contraseña de protección de Word admite de 1 a 15 caracteres ASCII (sin tildes ni ñ).'); }
+    if (!/^[\x20-\x7E]{1,15}$/.test(pw)) { throw new Error(NRT('wordPw')); }
     var i, key = wordLegacyKey(pw), buf = new Uint8Array(salt.length + key.length * 2);
     buf.set(salt);
     for (i = 0; i < key.length; i++) { buf[salt.length + i * 2] = key.charCodeAt(i); }
@@ -1018,7 +1168,7 @@ window.novaReport = (function () {
       T[n] = 'NUMBER';
       cols.push({ col: n, label: tpl(sec.colLabel || '{' + pc + '}', ctx, kRow[k]), fmt: nfmt, align: 'right' });
     });
-    if (tot) { T.NRP_TOTAL = 'NUMBER'; cols.push({ col: 'NRP_TOTAL', label: sec.totalLabel || 'Total', fmt: nfmt, bold: true, align: 'right' }); }
+    if (tot) { T.NRP_TOTAL = 'NUMBER'; cols.push({ col: 'NRP_TOTAL', label: sec.totalLabel || NRT('total'), fmt: nfmt, bold: true, align: 'right' }); }
     out.columns = cols;
     out._types = T;
     out._rows = groups.map(function (g) {
@@ -1126,7 +1276,7 @@ window.novaReport = (function () {
       var url = imgUrl(a.url);
       if (PDFS[url]) { return null; }
       return fetch(url, { credentials: 'same-origin' }).then(function (r) {
-        if (!r.ok) { throw new Error('No se pudo cargar el PDF ' + url + ' (' + r.status + ')'); }
+        if (!r.ok) { throw new Error(NRT('pdfLoad', url, r.status)); }
         return r.arrayBuffer();
       }).then(function (b) { PDFS[url] = b; });
     }));
@@ -1159,7 +1309,7 @@ window.novaReport = (function () {
           p = p.then(function () { return L.PDFDocument.load(bytes, { ignoreEncryption: true }); })
             .then(function (src) { return base.copyPages(src, src.getPageIndices()); })
             .then(function (pages) { pages.forEach(function (pg) { base.insertPage(g.after + off, pg); off++; }); })
-            .catch(function (e) { throw new Error('No se pudo anexar el PDF: ' + (e && e.message || e)); });
+            .catch(function (e) { throw new Error(NRT('pdfAppend', e && e.message || e)); });
         });
       });
       return p.then(function () { return base.save(); });
@@ -1191,7 +1341,7 @@ window.novaReport = (function () {
         i += 2 + len;
       }
     }
-    throw new Error('Formato de imagen no soportado (use PNG o JPG).');
+    throw new Error(NRT('imgFmt'));
   }
   function toB64(buf) {
     var b = new Uint8Array(buf), s = '', CH = 0x8000;
@@ -1222,7 +1372,7 @@ window.novaReport = (function () {
       var url = imgUrl(u);
       if (IMG[url]) { return null; }
       return fetch(url, { credentials: 'same-origin' }).then(function (r) {
-        if (!r.ok) { throw new Error('No se pudo cargar la imagen ' + url + ' (' + r.status + ')'); }
+        if (!r.ok) { throw new Error(NRT('imgLoad', url, r.status)); }
         return r.arrayBuffer();
       }).then(function (buf) {
         var d = imgDims(buf);
@@ -1245,7 +1395,7 @@ window.novaReport = (function () {
   function imgOf(sec, ctx) {
     if (sec.field) {
       var r = (sec.source ? rowsOf(sec, ctx)[0] : ctx.doc) || {}, v = r[String(sec.field).toUpperCase()];
-      try { return v ? imgFromB64(v) : null; } catch (e) { if (window.console) { console.warn('novaReport: imagen inválida en ' + sec.field, e); } return null; }
+      try { return v ? imgFromB64(v) : null; } catch (e) { if (window.console) { console.warn(NRT('imgBad', sec.field), e); } return null; }
     }
     return IMG[imgUrl(sec.url)] || null;
   }
@@ -1265,7 +1415,7 @@ window.novaReport = (function () {
     return { buf: b64ToBuf(url.replace(/^data:[^,]*,/, '')), data: url, w: w, h: h, ext: 'png' };
   }
   function newCanvas(w, h) {
-    if (typeof document === 'undefined' || !document.createElement) { throw new Error('Se requiere un navegador (canvas) para generar gráficos.'); }
+    if (typeof document === 'undefined' || !document.createElement) { throw new Error(NRT('canvas')); }
     var c = document.createElement('canvas');
     c.width = w; c.height = h;
     return c;
@@ -1351,7 +1501,7 @@ window.novaReport = (function () {
   }
   function qrMatrix(text, ecc) {
     var Q = window.qrcode;
-    if (!Q) { throw new Error('No se cargó la librería de códigos QR.'); }
+    if (!Q) { throw new Error(NRT('qrLib')); }
     if (Q.stringToBytesFuncs && Q.stringToBytesFuncs['UTF-8']) { Q.stringToBytes = Q.stringToBytesFuncs['UTF-8']; }
     var q = Q(0, String(ecc || 'M').toUpperCase());
     q.addData(String(text));
@@ -1374,7 +1524,7 @@ window.novaReport = (function () {
       return { kind: 'bar', text: v, cols: bars.length, rows: 1, dark: function (x) { return bars[x]; }, w: bw, h: sec.height || 12,
                color: color, quiet: 8, label: sec.showText !== false, textSize: sec.textSize || 8 };
     }
-    throw new Error('Tipo de código no soportado: ' + kind + ' (use qr o code128).');
+    throw new Error(NRT('codeKind', kind));
   }
   /* PNG del código (Word / Excel) con zona blanca; wmm / hmm = tamaño final en mm */
   function codePng(c) {
@@ -1395,7 +1545,7 @@ window.novaReport = (function () {
   /* Sección "grafico": { chart: bar | hbar | line | area | pie | doughnut, source, category, series[], width, height, ... } */
   function chartImg(sec, ctx, th) {
     var Ch = window.Chart;
-    if (!Ch) { throw new Error('No se cargó la librería de gráficos (Chart.js).'); }
+    if (!Ch) { throw new Error(NRT('chartLib')); }
     var rows = rowsOf(sec, ctx);
     if (!rows.length) { return null; }
     var src = String(sec.source || '').toUpperCase(), types = ctx.T[src] || {}, names = Object.keys(types);
@@ -1556,7 +1706,7 @@ window.novaReport = (function () {
   function renderPdf(layout, ctxs, hooks, opt) {
     var page = layout.page || {}, th = themeOf(layout), sz = th.fontSize;
     var sec0 = pdfSecurity(layout, ctxs[0] || { S: {}, T: {} }, opt);
-    if (sec0 && Array.isArray(layout.append) && layout.append.length) { return Promise.reject(new Error('No se puede anexar PDFs a un PDF con contraseña.')); }
+    if (sec0 && Array.isArray(layout.append) && layout.append.length) { return Promise.reject(new Error(NRT('appendPw'))); }
     var dopt = { orientation: page.orientation || 'portrait', unit: 'mm', format: page.size || 'letter', compress: !layoutHasForm(layout) };
     if (sec0) { dopt.encryption = sec0; }
     var doc = new window.jspdf.jsPDF(dopt);
@@ -2176,7 +2326,7 @@ window.novaReport = (function () {
     pdfFormFix(doc);
     var apx = pdfAppends(layout, ranges);
     if (apx.length) {
-      if (!window.PDFLib || !window.PDFLib.PDFDocument) { return Promise.reject(new Error('No se pudo cargar la librería: pdf-lib')); }
+      if (!window.PDFLib || !window.PDFLib.PDFDocument) { return Promise.reject(new Error(NRT('libLoad', 'pdf-lib'))); }
       return appendPdfs(doc.output('arraybuffer'), apx);
     }
     return Promise.resolve(doc.output('arraybuffer'));
@@ -2200,10 +2350,10 @@ window.novaReport = (function () {
       c.numFmt = '@';
       if (f.input === 'list') {
         c.dataValidation = { type: 'list', allowBlank: true, formulae: [listRef(f.options)], showErrorMessage: true,
-                             errorTitle: fieldTitle(f), error: 'Elija un valor de la lista.' };
+                             errorTitle: fieldTitle(f), error: NRT('pickList') };
       } else if (f.maxLength) {
         c.dataValidation = { type: 'textLength', operator: 'lessThanOrEqual', allowBlank: true, formulae: [f.maxLength], showErrorMessage: true,
-                             errorTitle: fieldTitle(f), error: 'Máximo ' + f.maxLength + ' caracteres.' };
+                             errorTitle: fieldTitle(f), error: NRT('maxLen', f.maxLength) };
       }
     }
     c.name = f.name;
@@ -2225,12 +2375,12 @@ window.novaReport = (function () {
     var wb = new window.ExcelJS.Workbook(), th = themeOf(layout), used = {};
     var prot = formProtect(layout, opt), formReg = formNames(), protects = [], lists = { ws: null, n: 0, ref: {} };
     wb.creator = 'novaReport';
-    var defs = (layout.xlsx && layout.xlsx.sheets) || [{ name: layout.xlsx && layout.xlsx.sheetName || 'Reporte' }];
+    var defs = (layout.xlsx && layout.xlsx.sheets) || [{ name: layout.xlsx && layout.xlsx.sheetName || NRT('sheet') }];
     var secs = sectionsFor(layout, 'xlsx'), page = layout.page || {};
     var fillP = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(th.primary) } };
 
     function uniq(name) {
-      var base = safeName(name).replace(/[\[\]]/g, '').substr(0, 31) || 'Hoja', n = base, i = 2;
+      var base = safeName(name).replace(/[\[\]]/g, '').substr(0, 31) || NRT('sheetN'), n = base, i = 2;
       while (used[n.toLowerCase()]) { n = base.substr(0, 31 - String(i).length - 1) + '_' + i; i++; }
       used[n.toLowerCase()] = true;
       return n;
@@ -2256,7 +2406,7 @@ window.novaReport = (function () {
         var sname = tpl(sd.name, ctx);
         if (merge && ctxs.length > 1) { sname = tpl(sd.mergeName || (defs.length > 1 ? '{DOC.DOC_KEY} ' + sd.name : '{DOC.DOC_KEY}'), ctx); }
         var ws = wb.addWorksheet(uniq(sname), {
-          pageSetup: { orientation: page.orientation || 'portrait', paperSize: page.size === 'legal' ? 5 : (page.size === 'a4' ? 9 : 1),
+          pageSetup: { orientation: page.orientation || 'portrait', paperSize: XL_PAPER[String(page.size || 'letter').toLowerCase()] || 1,
                        fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
         var list = sd.sections ? sd.sections.map(function (id) {
           return typeof id === 'number' ? secs[id] : secs.filter(function (s) { return s.id === id; })[0];
@@ -2423,7 +2573,7 @@ window.novaReport = (function () {
               }
               var raw = (/^\{[^}|]+\}$/.test(f.value || '') && !f.map) ? lookup(ctx, f.value.slice(1, -1), fr) : null;
               if (isNum(raw) && !textFmt(f.fmt)) { vc.value = raw; if (f.fmt === 'money') { vc.numFmt = '#,##0.00'; } else if (isMask(f.fmt)) { vc.numFmt = maskXl(f.fmt); } vc.alignment = { horizontal: 'left' }; }
-              else if (f.fmt === 'date' && parseDate(raw)) { vc.value = parseDate(raw); vc.numFmt = 'dd/mm/yyyy'; vc.alignment = { horizontal: 'left' }; }
+              else if (f.fmt === 'date' && parseDate(raw)) { vc.value = parseDate(raw); vc.numFmt = LOC.xl; vc.alignment = { horizontal: 'left' }; }
               else { vc.value = fieldText(f, ctx, fr); }
               var fhx = hrefOf(f, ctx, fr);
               if (fhx) { vc.value = { text: String(fieldText(f, ctx, fr)), hyperlink: fhx }; vc.font = { underline: true, color: { argb: argb(th.link) } }; }
@@ -2568,8 +2718,8 @@ window.novaReport = (function () {
                 var dt = (a.fn === 'min' || a.fn === 'max') && v !== null && !numLike(v) ? parseDate(v) : null;
                 var res = v === null || v === undefined ? null : (dt || (numLike(v) ? Math.round(Number(v) * 100) / 100 : String(v)));
                 cell.value = { formula: (sub ? 'SUBTOTAL(' + AGG_XL[a.fn] + ',' : AGG_FX[a.fn] + '(') + rng + ')', result: res };
-                var nf = a.fn === 'count' ? '#,##0' : (dt ? 'dd/mm/yyyy' : (isMask(c.fmt) ? maskXl(c.fmt) : '#,##0.00'));
-                cell.numFmt = mixed && AGG_PRE[a.fn] ? '"' + AGG_PRE[a.fn] + ' "' + nf : nf;
+                var nf = a.fn === 'count' ? '#,##0' : (dt ? LOC.xl : (isMask(c.fmt) ? maskXl(c.fmt) : '#,##0.00'));
+                cell.numFmt = mixed && aggPre(a.fn) ? '"' + aggPre(a.fn) + ' "' + nf : nf;
                 cell.alignment = { horizontal: 'right' };
                 if (res !== null && !dt) { setW(i + 1, numLike(res) ? fmt(res, isMask(c.fmt) && a.fn !== 'count' ? c.fmt : 'money') : res); }
               });
@@ -2611,7 +2761,7 @@ window.novaReport = (function () {
                   cell.value = raw;
                   cell.numFmt = xlNumFmt(c.fmt);
                 } else if ((c.fmt === 'date' || (sec._types || ctx.T[String(sec.source).toUpperCase()] || {})[c.col] === 'DATE') && parseDate(raw)) {
-                  cell.value = parseDate(raw); cell.numFmt = 'dd/mm/yyyy';
+                  cell.value = parseDate(raw); cell.numFmt = LOC.xl;
                 } else {
                   cell.value = raw === null || raw === undefined ? null : (textFmt(c.fmt) && !c.map ? fmt(raw, c.fmt) : String(raw));
                 }
@@ -2652,7 +2802,7 @@ window.novaReport = (function () {
           protects.push(ws.protect(prot.password, { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true, formatRows: true }));
         }
         if (layout.footer) {
-          ws.headerFooter.oddFooter = '&L&8' + tpl(layout.footer.left, ctx).replace(/&/g, '&&').substr(0, 200) + '&R&8Página &P de &N';
+          ws.headerFooter.oddFooter = '&L&8' + tpl(layout.footer.left, ctx).replace(/&/g, '&&').substr(0, 200) + '&R&8' + NRT('xlPage');
         }
         /* 1.23: encabezado de página como encabezado de impresión (&L &C &R); {PAGE} = &P, {PAGES} = &N */
         if (layout.pageHeader && typeof layout.pageHeader === 'object') {
@@ -2676,7 +2826,16 @@ window.novaReport = (function () {
   }
 
   /* ================================================================== WORD (docx) */
-  var PAGES_TW = { letter: [12240, 15840], legal: [12240, 20160], a4: [11906, 16838] };
+  var PAGES_TW = { letter: [12240, 15840], legal: [12240, 20160], a4: [11906, 16838],
+                   a3: [16838, 23811], a5: [8391, 11906], b5: [9979, 14175], tabloid: [15840, 24480], executive: [10440, 15120] };
+  /* 1.24: Word acepta los tamaños con nombre y uno propio en mm [ancho, alto] (como el PDF) */
+  function pageTw(size) {
+    if (Array.isArray(size) && size.length === 2 && size[0] > 0 && size[1] > 0) {
+      var a = Math.round(Math.min(size[0], size[1]) * 56.6929), b = Math.round(Math.max(size[0], size[1]) * 56.6929);
+      return [a, b];
+    }
+    return PAGES_TW[String(size || 'letter').toLowerCase()] || PAGES_TW.letter;
+  }
   /* Pie de página Word: solo si el diseño trae "footer"; {PAGE} y {PAGES} se vuelven campos de Word */
   /* Texto con {PAGE} {PAGES} {DOCPAGE} {DOCPAGES} como campos de Word ({DOCPAGES} = páginas de la sección) */
   var DOCX_PG = { '{PAGE}': 'CURRENT', '{PAGES}': 'TOTAL_PAGES', '{DOCPAGE}': 'CURRENT', '{DOCPAGES}': 'TOTAL_PAGES_IN_SECTION' };
@@ -2749,7 +2908,7 @@ window.novaReport = (function () {
         var n = 0;
         var re = new RegExp('<w:r>(<w:rPr>(?:(?!</w:rPr>)[\\s\\S])*</w:rPr>)?<w:t xml:space="preserve">' + FORM_MARK + '(\\d+)' + FORM_END + '</w:t></w:r>', 'g');
         var doc = xs[0].replace(re, function (m, rPr, i) { n++; return docxSdt(fields[+i], 1000 + Number(i), rPr || '<w:rPr></w:rPr>'); });
-        if (n !== fields.length) { throw new Error('Word: no se pudieron colocar todos los campos del formulario (' + n + ' de ' + fields.length + ').'); }
+        if (n !== fields.length) { throw new Error(NRT('wordFields', n, fields.length)); }
         z.file('word/document.xml', doc);
         z.file('word/settings.xml', docxProtection(xs[1], prot));
         return z.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
@@ -2758,7 +2917,7 @@ window.novaReport = (function () {
   }
   function renderDocx(layout, ctxs, opt) {
     var D = window.docx, th = themeOf(layout), page = layout.page || {}, fields = [], formReg = formNames();
-    var dims = PAGES_TW[page.size || 'letter'] || PAGES_TW.letter, land = page.orientation === 'landscape';
+    var dims = pageTw(page.size), land = page.orientation === 'landscape';
     var mg = Math.round((page.margin || 12.7) * 56.7), usable = (land ? dims[1] : dims[0]) - 2 * mg;
     var none = { style: D.BorderStyle.NONE, size: 0, color: 'FFFFFF' };
     var noB = { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none };
@@ -3198,11 +3357,11 @@ window.novaReport = (function () {
   /* ================================================================== WORD desde plantilla */
   var tplCache = {};
   function getTemplate(url) {
-    if (!url) { return Promise.reject(new Error('Defina la URL de la plantilla Word (atributo "Plantilla Word").')); }
+    if (!url) { return Promise.reject(new Error(NRT('tplUrl'))); }
     url = imgUrl(url);   /* #APP_FILES#, #WORKSPACE_FILES#, #IMAGE_PREFIX# */
     if (tplCache[url]) { return Promise.resolve(tplCache[url]); }
     return fetch(url, { credentials: 'same-origin' }).then(function (r) {
-      if (!r.ok) { throw new Error('No se pudo descargar la plantilla (' + r.status + ')'); }
+      if (!r.ok) { throw new Error(NRT('tplDl', r.status)); }
       return r.arrayBuffer();
     }).then(function (b) { tplCache[url] = b; return b; });
   }
@@ -3294,13 +3453,13 @@ window.novaReport = (function () {
     var w = window.open('', '_blank');
     if (!w) { return null; }
     if (typeof window.cotLoader === 'function') {
-      try { window.cotLoader(w); var h = w.document.getElementsByTagName('h1')[0]; if (h) { h.textContent = 'Generando reporte'; } } catch (e) {}
+      try { window.cotLoader(w); var h = w.document.getElementsByTagName('h1')[0]; if (h) { h.textContent = NRT('generating'); } } catch (e) {}
     } else {
-      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Generando reporte…</title><style>' +
+      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + NRT('generating') + '…</title><style>' +
         'body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;background:#f4f6f9;color:#1f4e79}' +
         '.b{text-align:center}.s{width:56px;height:56px;border:5px solid #d6e0ea;border-top-color:#1f4e79;border-radius:50%;animation:r 1s linear infinite;margin:0 auto 18px}' +
         '@keyframes r{to{transform:rotate(360deg)}}h1{font-size:20px;margin:0 0 6px}p{margin:0;color:#5b6b7b}</style></head>' +
-        '<body><div class="b"><div class="s"></div><h1>Generando reporte</h1><p id="msg"></p></div></body></html>');
+        '<body><div class="b"><div class="s"></div><h1>' + NRT('generating') + '</h1><p id="msg"></p></div></body></html>');
       w.document.close();
     }
     loaderMsg(w, msg);
@@ -3329,16 +3488,16 @@ window.novaReport = (function () {
     var blob = out.data instanceof Blob ? out.data : new Blob([out.data], { type: mime });
     return new Promise(function (resolve, reject) {
       var fr = new FileReader();
-      fr.onerror = function () { reject(new Error('No se pudo leer el archivo generado.')); };
+      fr.onerror = function () { reject(new Error(NRT('readFile'))); };
       fr.onload = function () {
         var b = String(fr.result).replace(/^data:[^,]*,/, ''), parts = [], i;
         for (i = 0; i < b.length; i += 30000) { parts.push(b.substr(i, 30000)); }
         apex.server.process(sv.process, { x01: out.name, x02: mime, x03: info.report === undefined ? '' : String(info.report),
                                           x04: JSON.stringify(info.params || {}), x05: out.kind, f01: parts }, { dataType: 'json' })
           .then(function (r) {
-            if (r && r.ok === false) { reject(new Error(r.msg || 'El servidor no guardó el documento.')); return; }
+            if (r && r.ok === false) { reject(new Error(r.msg || NRT('notSaved'))); return; }
             resolve(r || {});
-          }, function (x, st, e) { reject(new Error('No se pudo guardar en el servidor: ' + (e || st))); });
+          }, function (x, st, e) { reject(new Error(NRT('saveErr', e || st))); });
       };
       fr.readAsDataURL(blob);
     });
@@ -3355,7 +3514,7 @@ window.novaReport = (function () {
   var EXT = { pdf: 'pdf', xlsx: 'xlsx', docx: 'docx', 'docx-template': 'docx' };
 
   function fileName(layout, ctx, f) {
-    var n = tpl(layout.fileName || 'reporte', ctx), ext = EXT[f];
+    var n = tpl(layout.fileName || NRT('fileName'), ctx), ext = EXT[f];
     n = n.replace(/\.(pdf|xlsx|docx)$/i, '');
     return safeName(n) + '.' + ext;
   }
@@ -3366,23 +3525,25 @@ window.novaReport = (function () {
     if (f === 'docx-template') {
       return getTemplate(opt.templateUrl).then(function (b) { return renderDocxTemplate(b, ctxs[0]); });
     }
-    return Promise.reject(new Error('Formato no soportado: ' + f));
+    return Promise.reject(new Error(NRT('fmtBad', f)));
   }
 
   /* Núcleo: recibe datos ya obtenidos (sirve también para pruebas sin APEX) */
   function build(opt, data) {
     var lay = parseLayout(opt.layout), o2 = {}, k;
+    setLocale(lay, opt);
     for (k in opt) { o2[k] = opt[k]; }
     o2.layout = lay;
     return Promise.all([preloadImages(lay), preloadPdfs(lay, opt.format || 'pdf')]).then(function () { return buildCore(o2, data); });
   }
   function buildCore(opt, data) {
     var layout = parseLayout(opt.layout), formats = opt.format === 'all' ? ['pdf', 'xlsx', 'docx'] : [opt.format || 'pdf'];
+    setLocale(layout, opt);
     var norm = normalize(data), ctxs = contexts(norm, opt.params || {});
     var output = opt.output || 'file';
-    if (!ctxs.length) { return Promise.reject(new Error(opt.emptyMessage || layout.emptyMessage || 'No hay datos para generar el reporte.')); }
+    if (!ctxs.length) { return Promise.reject(new Error(opt.emptyMessage || layout.emptyMessage || NRT('noData'))); }
     if (layout.batch && layout.batch.maxDocs && ctxs.length > layout.batch.maxDocs) {
-      return Promise.reject(new Error('El lote supera el máximo de ' + layout.batch.maxDocs + ' documentos.'));
+      return Promise.reject(new Error(NRT('batchMax', layout.batch.maxDocs)));
     }
     var single = (output === 'file' && ctxs.length === 1 && formats.length === 1) || (output === 'merge' && formats.length === 1 && formats[0] !== 'docx-template');
     if (single) {
@@ -3390,7 +3551,7 @@ window.novaReport = (function () {
       return renderOne(f0, layout, ctxs, opt).then(function (buf) {
         var nm = fileName(layout, ctxs[0], f0);
         if (ctxs.length > 1) {  /* merge: nombre del lote, no del primer documento */
-          var mb = (layout.batch && (layout.batch.mergeName || layout.batch.zipName)) || layout.fileName || 'reporte';
+          var mb = (layout.batch && (layout.batch.mergeName || layout.batch.zipName)) || layout.fileName || NRT('fileName');
           nm = fileName({ fileName: String(mb).replace(/\.zip$/i, '') }, { S: norm.S, T: norm.T, doc: {}, params: opt.params || {} }, f0);
         }
         return { kind: f0, data: buf, name: nm, count: ctxs.length };
@@ -3435,7 +3596,7 @@ window.novaReport = (function () {
             if (i < ctxs.length) { setTimeout(step, 0); return; }
             if (opt.onProgress) { opt.onProgress(-1, files); }
             zip.generateAsync({ type: opt.zipType || 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }).then(function (z) {
-              var zn = tpl((layout.batch && layout.batch.zipName) || 'reportes.zip', gctx);
+              var zn = tpl((layout.batch && layout.batch.zipName) || NRT('zipName'), gctx);
               resolve({ kind: 'zip', data: z, name: safeName(/\.zip$/i.test(zn) ? zn : zn + '.zip'), count: ctxs.length, files: files });
             }, reject);
           }, reject);
@@ -3473,6 +3634,10 @@ window.novaReport = (function () {
     return l;
   }
   /* "@NOMBRE" se reemplaza por layout.defs.NOMBRE (reutilizar columnas, estilos, secciones) */
+  /* 1.24: nombres de sección en inglés (alias); el motor trabaja con los nombres originales */
+  var TYPE_EN = { table: 'tabla', cards: 'tarjetas', details: 'ficha', record: 'ficha', alert: 'alerta', text: 'texto', image: 'imagen',
+                  chart: 'grafico', code: 'codigo', barcode: 'codigo', form: 'formulario', line: 'linea', columns: 'columnas',
+                  group: 'grupo', space: 'espacio', spacer: 'espacio', pagebreak: 'salto', 'break': 'salto' };
   function resolveDefs(node, defs) {
     if (typeof node === 'string' && node.charAt(0) === '@' && defs && defs[node.substr(1)] !== undefined) {
       return resolveDefs(defs[node.substr(1)], defs);
@@ -3486,7 +3651,10 @@ window.novaReport = (function () {
     }
     if (node && typeof node === 'object') {
       var o = {};
-      Object.keys(node).forEach(function (k) { o[k] = k === 'defs' ? node[k] : resolveDefs(node[k], defs); });
+      Object.keys(node).forEach(function (k) {
+        o[k] = k === 'defs' ? node[k] : resolveDefs(node[k], defs);
+        if (k === 'type' && typeof o[k] === 'string' && Object.prototype.hasOwnProperty.call(TYPE_EN, o[k].toLowerCase())) { o[k] = TYPE_EN[o[k].toLowerCase()]; }
+      });
       return o;
     }
     return node;
@@ -3500,7 +3668,7 @@ window.novaReport = (function () {
       else {
         /* Referencia a una variable global: p. ej. misLayouts.planPdf */
         o = s.split('.').reduce(function (a, k) { return a ? a[k] : undefined; }, window);
-        if (!o) { throw new Error('No se encontró el diseño: ' + s); }
+        if (!o) { throw new Error(NRT('layoutNF', s)); }
       }
     }
     return resolveDefs(o, o.defs);
@@ -3514,10 +3682,13 @@ window.novaReport = (function () {
     return a.length ? a : undefined;
   }
   /* API pública: novaReport.run({...}) */
+  /* Mensaje de espera: el valor por defecto del atributo hasta 1.23 ("Consultando datos...") se traduce */
+  function waitMsg(m) { return !m || (LANG !== 'es' && /^Consultando datos(\.\.\.|…)$/.test(String(m))) ? NRT('querying') : m; }
   function run(o) {
+    LANG = pickLang(o.lang) || autoLang();
     var formats = o.format === 'all' ? ['pdf', 'xlsx', 'docx'] : [o.format || 'pdf'];
     var openPdf = formats.length === 1 && formats[0] === 'pdf' && o.output !== 'zip' && o.pdfAction !== 'download';
-    var w = openPdf && o.loader !== false ? loaderOpen(o.message || 'Consultando datos…') : null;
+    var w = openPdf && o.loader !== false ? loaderOpen(waitMsg(o.message)) : null;
     var sp = (window.apex && apex.util) ? apex.util.showSpinner() : null;
     /* Origen "resolver": el diseño y las fuentes los decide el servidor a partir de o.report + o.params */
     var resolver = o.origin === 'resolver' && !o.data;
@@ -3525,36 +3696,36 @@ window.novaReport = (function () {
     var query = o.origin === 'query' && !o.data;
     var layout;
     if (!resolver && !query) {
-      try { layout = parseLayout(o.layout); } catch (e) { if (sp) { sp.remove(); } if (w) { w.close(); } alertMsg('Diseño inválido: ' + e.message); return Promise.reject(e); }
+      try { layout = parseLayout(o.layout); } catch (e) { if (sp) { sp.remove(); } if (w) { w.close(); } alertMsg(NRT('layoutBad', e.message)); return Promise.reject(e); }
     }
     var opt = { layout: layout, format: o.format, output: o.output, params: o.params || {}, templateUrl: o.templateUrl, hooks: o.hooks || {},
-                formPassword: o.formPassword, pdfPassword: o.pdfPassword };
+                formPassword: o.formPassword, pdfPassword: o.pdfPassword, lang: o.lang };
     fire('start', { format: o.format, output: o.output, report: resolver ? o.report : undefined });
     var needZip = o.output !== 'merge';
     var libs = ensure(libsFor(formats, needZip).concat(resolver || query ? [] : layoutLibs(layout)));
     var req = o.data ? Promise.resolve({ data: o.data }) : new Promise(function (resolve, reject) {
-      var q = { x01: JSON.stringify(opt.params), x02: o.output === 'zip' ? 'Y' : 'N', pageItems: itemsOf(o.items) };
+      var q = { x01: JSON.stringify(opt.params), x02: o.output === 'zip' ? 'Y' : 'N', x04: LANG, pageItems: itemsOf(o.items) };
       if (resolver) {
-        if (o.report === undefined || o.report === null || o.report === '') { reject(new Error('Indique el reporte a generar (data-report).')); return; }
+        if (o.report === undefined || o.report === null || o.report === '') { reject(new Error(NRT('reportReq'))); return; }
         q.x03 = String(o.report);
       }
       apex.server.plugin(o.ajaxIdentifier, q, { dataType: 'json' }).then(function (r) {
-        if (!r || !r.ok) { reject(new Error((r && r.msg) || 'Error al obtener los datos.')); return; }
+        if (!r || !r.ok) { reject(new Error((r && r.msg) || NRT('dataErr'))); return; }
         resolve(r);
-      }, function (x, s, e) { reject(new Error('Error de comunicación: ' + (e || s))); });
+      }, function (x, s, e) { reject(new Error(NRT('commErr', e || s))); });
     });
     return Promise.all([req, libs]).then(function (res) {
       var r = res[0], more = Promise.resolve();
       if (resolver) {
-        try { layout = parseLayout(r.layout); } catch (e) { throw new Error('Diseño inválido: ' + e.message); }
+        try { layout = parseLayout(r.layout); } catch (e) { throw new Error(NRT('layoutBad', e.message)); }
         opt.layout = layout;
         if (r.params) { opt.params = r.params; }
         if (r.templateUrl) { opt.templateUrl = r.templateUrl; }
         more = ensure(layoutLibs(layout));
       } else if (query) {
         var lv = r.layout || o.layout;
-        if (!lv) { throw new Error('Falta el diseño: la consulta del reporte no devolvió LAYOUT y el atributo Diseño está vacío.'); }
-        try { layout = parseLayout(lv); } catch (e) { throw new Error('Diseño inválido: ' + e.message); }
+        if (!lv) { throw new Error(NRT('layoutMissing')); }
+        try { layout = parseLayout(lv); } catch (e) { throw new Error(NRT('layoutBad', e.message)); }
         opt.layout = layout;
         if (r.templateUrl) { opt.templateUrl = r.templateUrl; }
         more = ensure(layoutLibs(layout));
@@ -3563,17 +3734,17 @@ window.novaReport = (function () {
     }).then(function (raw) {
       if (sp) { sp.remove(); sp = null; }
       var data = o.transform ? (o.transform(raw) || raw) : raw;
-      loaderMsg(w, 'Armando el documento…');
+      loaderMsg(w, NRT('building'));
       opt.onProgress = function (n, total) {
-        if (n === -1) { toast('Comprimiendo ' + total + ' archivos…'); }
-        else { toast('Generando ' + n + ' de ' + total + '…'); fire('progress', { done: n, total: total }); }
+        if (n === -1) { toast(NRT('zipping', total)); }
+        else { toast(NRT('genN', n, total)); fire('progress', { done: n, total: total }); }
       };
       return build(opt, data);
     }).then(function (out) {
       var sv = o.save || (opt.layout && opt.layout.save);
       if (!sv || !sv.process) { return out; }
-      if (!(window.apex && apex.server)) { throw new Error('Guardar en el servidor requiere APEX.'); }
-      toast('Guardando en el servidor…');
+      if (!(window.apex && apex.server)) { throw new Error(NRT('needApex')); }
+      toast(NRT('saving'));
       return saveServer(out, sv, { report: o.report, params: opt.params }).then(function (r) {
         out.saved = r; out.only = sv.mode === 'only';
         fire('saved', { name: out.name, kind: out.kind, response: r });
@@ -3583,14 +3754,14 @@ window.novaReport = (function () {
       toast();
       if (out.only) {
         if (w) { w.close(); }
-        okMsg((out.saved && out.saved.msg) || ('Documento guardado: ' + out.name));
+        okMsg((out.saved && out.saved.msg) || NRT('saved', out.name));
       } else if (out.kind === 'pdf' && openPdf) {
         var url = URL.createObjectURL(new Blob([out.data], { type: MIME.pdf }));
         if (w && !w.closed) { w.location.href = url; } else { window.open(url, '_blank'); }
       } else {
         if (w) { w.close(); }
         download(out.data, out.name, out.kind === 'zip' ? 'application/zip' : MIME[out.kind] || MIME.docx);
-        if (out.kind === 'zip') { okMsg('ZIP generado: ' + out.files + ' archivos de ' + out.count + ' documentos.'); }
+        if (out.kind === 'zip') { okMsg(NRT('zipDone', out.files, out.count)); }
       }
       fire('end', { name: out.name, count: out.count, files: out.files });
       return out;
@@ -3600,7 +3771,7 @@ window.novaReport = (function () {
       if (w && !w.closed) { w.close(); }
       if (window.console) { console.error(e); }
       fire('error', { message: e.message });
-      alertMsg(e.message || 'No se pudo generar el reporte.');
+      alertMsg(e.message || NRT('failed'));
       throw e;
     });
   }
@@ -3632,7 +3803,7 @@ window.novaReport = (function () {
     var o = { layout: cfg.layout || a.attribute01, format: fmtV, output: out, items: cfg.items || a.attribute04 || '',
               pdfAction: cfg.pdfAction || a.attribute05 || 'open', templateUrl: cfg.templateUrl || a.attribute06,
               message: cfg.message || a.attribute07, params: params, ajaxIdentifier: cfg.ajaxIdentifier || a.ajaxIdentifier,
-              origin: cfg.origin || 'attributes', report: report, save: cfg.save };
+              origin: cfg.origin || 'attributes', report: report, save: cfg.save, lang: cfg.lang };
     if (typeof init === 'function') {
       var r0 = init(o);
       if (r0 === false) { return; }           /* init puede cancelar (p. ej. validación de un formulario) */
@@ -3642,8 +3813,8 @@ window.novaReport = (function () {
     run(o).then(function () { busy = false; }, function () { busy = false; });
   }
 
-  return { version: VERSION, libs: LIBS, run: run, da: da, build: build, ensure: ensure, layoutLibs: layoutLibs,
+  return { version: VERSION, libs: LIBS, run: run, da: da, lang: function () { return LANG; }, build: build, ensure: ensure, layoutLibs: layoutLibs,
            _internals: { IMG: IMG, imgDims: imgDims, tpl: tpl, cond: cond, fmt: fmt, normalize: normalize, contexts: contexts,
                          code128: code128, png1: png1, layoutLibs: layoutLibs,
-                         sha512: sha512, wordLegacyKey: wordLegacyKey, wordHash: wordHash, formName: formName } };
+                         sha512: sha512, wordLegacyKey: wordLegacyKey, wordHash: wordHash, formName: formName, setLocale: setLocale, T: NRT, words: words } };
 })();
